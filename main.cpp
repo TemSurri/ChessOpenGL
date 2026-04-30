@@ -2,61 +2,87 @@
 //
 
 #include "gameInfo.h"
+#include "pieceInfo.h"
+#include <vector>
 
 
 using namespace std;
 
-const int BOARDROWS = 8;
-const int BOARDCOLS = 8;
 
-// will implcicityly convert to int
+Piece* board[BOARDROWS][BOARDCOLS]{ nullptr }; //change this to board with objects
+std::vector<Piece> whitePieces;
+std::vector<Piece> blackPieces;
 
-int board[BOARDCOLS][BOARDROWS]{}; //change this to board with objects
+//helper function to store each piece in it's vector and return a pointer to that location
+Piece* storePiece(int r, int c, PieceType type) {
+
+	// assume row greater than 4 is white
+	// this is where we can store differnt objects based on type but for not itll be on Piece class later can do inhertiance
+	bool is_white = (r>4)?false:true;
+	Piece piece = Piece(r, c, is_white, type);
+	
+	if (is_white) {
+		whitePieces.push_back(piece);
+		return &(whitePieces.back());
+	}
+	else {
+		blackPieces.push_back(piece);
+		return &(blackPieces.back());
+	}
+};
 
 // this function will initialize the board with the pieces int their standard starting position
-constexpr void initBoard(int b1[BOARDROWS][BOARDCOLS]) {
+void initBoardAndVectors(Piece* b1[BOARDROWS][BOARDCOLS]) {
+	whitePieces.reserve(pieceNumber);
+	blackPieces.reserve(pieceNumber);
 
 	for (int r{}; r < BOARDROWS; r++) {
 
 		for (int c{}; c < BOARDCOLS; c++) {
 
 			if (r == 1 || r == 6) {
-				b1[r][c] = Pawn;
+				b1[r][c] = storePiece(r, c, Pawn);
 			}
-
 			else if (r == 0 || r == 7) {
 				if (c == 0 || c == 7) {
-					b1[r][c] = Rook;
+					b1[r][c] = storePiece(r, c, Rook);
 				}
 				else if (c == 1 || c == 6) {
-					b1[r][c] = Knight;
+					b1[r][c] = storePiece(r, c, Knight);
 				}
 				else if (c == 2 || c == 5) {
-					b1[r][c] = Bishop;
+					b1[r][c] = storePiece(r, c, Bishop);
 				}
 				else if (c == 3) {
-					b1[r][c] = Queen;
+					b1[r][c] = storePiece(r, c, Queen);
 				}
 				else if (c == 4) {
-					b1[r][c] = King;
-				};
-			};
+					b1[r][c] = storePiece(r, c, King);
+				}
+			}
 		};
 	};
 };
 
-void printBoard(int b1[BOARDROWS][BOARDCOLS]) {
+void printBoard(Piece* b1[BOARDROWS][BOARDCOLS]) {
 	for (int r{}; r < BOARDROWS; r++) {
 		for (int c{}; c < BOARDCOLS; c++) {
-			cout << b1[r][c] << " ";
+
+			if (b1[r][c] == nullptr) {
+				cout << 0 << " ";
+			}
+			else {
+				cout << b1[r][c]->getType() << " ";
+			}
 		};
 		cout << endl;
+		
 	};
 };
 
 int main(){
 
-	initBoard(board);
+	initBoardAndVectors(board);
 	printBoard(board);
 	return 0;
 	

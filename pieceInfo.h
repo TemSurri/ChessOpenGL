@@ -24,8 +24,18 @@ public:
 		type = type;
 	}
 
-};
+	int getType() {
+		return type;
+	}
 
+	bool getColor() {
+		return is_white;
+	}
+
+};
+// map of board with pointers to the pieces for quick search up
 extern Piece* board[BOARDROWS][BOARDCOLS];
+
+// list of pieces to keep track of
 extern std::vector<Piece> whitePieces;
 extern std::vector<Piece> blackPieces;

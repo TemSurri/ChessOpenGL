@@ -19,5 +19,6 @@ enum PieceType {
 
 };
 
-extern const int BOARDROWS;
-extern const int BOARDCOLS;
+constexpr int BOARDROWS = 8;
+constexpr int BOARDCOLS = 8;
+constexpr int pieceNumber = 16;

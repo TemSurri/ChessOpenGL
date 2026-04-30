@@ -1,14 +1,16 @@
 #include <iostream>
-#include "piecetype.h"
+#include <vector>
+#include "gameInfo.h"
+
 using namespace std;
 
 class Piece {
-private :
+private:
 	int x{};
 	int y{};
 	bool is_white;
 	int type;
-public : 
+public:
 	Piece(int x, int y, bool white, PieceType type)
 		: x{ x }, y{ y }, is_white{ white }, type{ type } {
 	};
@@ -18,6 +20,12 @@ public :
 		this->x = x;
 	};
 
-
+	void changeType(PieceType type) {
+		type = type;
+	}
 
 };
+
+extern Piece* board[BOARDROWS][BOARDCOLS];
+extern std::vector<Piece> whitePieces;
+extern std::vector<Piece> blackPieces;

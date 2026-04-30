@@ -18,3 +18,6 @@ enum PieceType {
 	King,
 
 };
+
+extern const int BOARDROWS;
+extern const int BOARDCOLS;

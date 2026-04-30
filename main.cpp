@@ -1,8 +1,8 @@
 ﻿// main.cpp : Defines the entry point for the application.
 //
 
-#include "piecetype.h"
-#include "piece.cpp"
+#include "gameInfo.h"
+
 
 using namespace std;
 
@@ -11,7 +11,7 @@ const int BOARDCOLS = 8;
 
 // will implcicityly convert to int
 
-int board[BOARDCOLS][BOARDROWS]{};
+int board[BOARDCOLS][BOARDROWS]{}; //change this to board with objects
 
 // this function will initialize the board with the pieces int their standard starting position
 constexpr void initBoard(int b1[BOARDROWS][BOARDCOLS]) {

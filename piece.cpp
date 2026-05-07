@@ -23,6 +23,25 @@ vector< std::array<int, 2>> Piece::verticalMovement() {
 
 };
 
+vector<std::array<int, 2>> Piece::oneStep() {
+
+	vector< std::array<int, 2>> theoretical_moves;
+	theoretical_moves.reserve(8);
+	// will put it in the order of up(0), down, right, left, upper-right, upper-left, lower-right, lower-left
+	theoretical_moves.push_back({ r - 1, c });
+	theoretical_moves.push_back({ r + 1, c });
+	theoretical_moves.push_back({ r, c + 1});
+	theoretical_moves.push_back({ r, c - 1});
+	theoretical_moves.push_back({ r - 1, c + 1 });
+	theoretical_moves.push_back({ r - 1, c - 1 });
+	theoretical_moves.push_back({ r + 1, c + 1 });
+	theoretical_moves.push_back({ r + 1, c - 1});
+
+
+	return theoretical_moves;
+
+};
+
 vector< std::array<int, 2>> Piece::horizontalMovement() {
 	
 	int lowerbound = BOARDROWS;
@@ -38,7 +57,6 @@ vector< std::array<int, 2>> Piece::horizontalMovement() {
 	}
 
 	return theoretical_moves;
-
 };
 
 

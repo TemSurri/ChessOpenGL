@@ -104,9 +104,9 @@ int main(){
 
 	initBoardAndVectors(board);
 
-	Piece p = blackPieces[9];
-	p.toString();
-	printMoves(p.horizontalMovement());
+	move(1, 6, 3, 4);
+
+	printMoves(blackPieces[14].oneStep());
 
 	printBoard(board);
 

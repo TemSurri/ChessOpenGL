@@ -17,7 +17,10 @@ Piece* storePiece(int r, int c, PieceType type) {
 
 	// assume row greater than 4 is white
 	// this is where we can store differnt objects based on type but for not itll be on Piece class later can do inhertiance
-	bool is_white = (r<4)?false:true;
+
+	//upper is white
+	bool is_white = (r > 4) ? false : true;
+
 	Piece piece = Piece(r, c, is_white, type);
 	
 	if (is_white) {
@@ -102,11 +105,14 @@ int main(){
 
 	bool game = true;
 
+	
 	initBoardAndVectors(board);
 
-	move(1, 6, 4, 6);
-
-	printMoves(blackPieces[14].horizontalMovement());
+	whitePieces[4].toString();
+	printMoves(whitePieces[4].oneStep());
+	move(1, 6, 5, 6);
+	
+	printMoves(whitePieces[14].oneStep());
 	printBoard(board);
 
 	while (game) {

@@ -4,22 +4,83 @@
 #include "gameInfo.h"
 #include <array>
 #include <cstdlib>
-
+#include <iterator>
 vector<std::array<int, 2>> Piece::oneStep() {
 
+	vector< std::array<int, 2>> straight_steps;
+	vector< std::array<int, 2>> diag_steps;
+
 	vector< std::array<int, 2>> theoretical_moves;
-	theoretical_moves.reserve(8);
-	// will put it in the order of up(0), down, right, left, upper-right, upper-left, lower-right, lower-left
-	theoretical_moves.push_back({ r - 1, c });
-	theoretical_moves.push_back({ r + 1, c });
-	theoretical_moves.push_back({ r, c + 1});
-	theoretical_moves.push_back({ r, c - 1});
-	theoretical_moves.push_back({ r - 1, c + 1 });
-	theoretical_moves.push_back({ r - 1, c - 1 });
-	theoretical_moves.push_back({ r + 1, c + 1 });
-	theoretical_moves.push_back({ r + 1, c - 1});
 
 
+	if (type == PieceType::King) {
+		// will put it in the order of up(0), down, right, left, 
+		straight_steps.push_back({ r - 1, c });
+		straight_steps.push_back({ r + 1, c });
+		straight_steps.push_back({ r, c + 1 });
+		straight_steps.push_back({ r, c - 1 });
+
+		// upper-right, upper-left, lower-right, lower-left
+		diag_steps.push_back({ r - 1, c + 1 });
+		diag_steps.push_back({ r - 1, c - 1 });
+		diag_steps.push_back({ r + 1, c + 1 });
+		diag_steps.push_back({ r + 1, c - 1 });
+	}
+		
+	else if (type == PieceType::Pawn){
+
+		if (upper) {
+			straight_steps.push_back({ r + 1, c });
+			diag_steps.push_back({ r + 1, c + 1 });
+			diag_steps.push_back({ r + 1, c - 1 });
+			if (moves == 0) {
+				straight_steps.push_back({ r + 2, c });
+			}
+		}
+		else {
+			straight_steps.push_back({ r - 1, c });
+			diag_steps.push_back({ r - 1, c + 1 });
+			diag_steps.push_back({ r - 1, c - 1 });
+			if (moves == 0) {
+				straight_steps.push_back({ r - 2, c });
+			}
+		}
+	}
+	
+	for (int i{}; i < straight_steps.size(); i++) {
+		int r = straight_steps[i][0];
+		int c = straight_steps[i][1];
+
+		if (board[r][c]) {
+			if (type == PieceType::Pawn) {
+				continue;
+			}
+			if (board[r][c]->is_white == is_white) {
+				continue;
+			}
+		}
+
+		theoretical_moves.push_back({ r,c });
+	}
+
+	for (int i{}; i < diag_steps.size(); i++) {
+		int r = diag_steps[i][0];
+		int c = diag_steps[i][1];
+
+	
+		if (board[r][c]) {
+
+			if (board[r][c]->is_white == is_white) {
+				continue;
+			}
+
+		}
+		else if (type == PieceType::Pawn) {
+			continue;
+		}
+		theoretical_moves.push_back({ r,c });
+	}
+	
 	return theoretical_moves;
 
 };

@@ -12,6 +12,8 @@ private:
 	int c{};
 	bool is_white;
 	int type;
+	bool upper = is_white;
+	int moves{};
 public:
 	Piece(int x, int y, bool white, PieceType type)
 		: r{ x }, c{ y }, is_white{ white }, type{ type } {
@@ -20,6 +22,7 @@ public:
 	void move(int x, int y) {
 		this->r = x;
 		this->c = y;
+		moves++;
 	};
 
 	void changeType(PieceType type) {

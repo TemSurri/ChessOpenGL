@@ -20,9 +20,11 @@ private:
 	vector< std::array<int, 2>> diagonalMovement();
 	vector< std::array<int, 2>>oneStep();
 
+	Piece* (&board)[BOARDROWS][BOARDCOLS];
+
 public:
-	Piece(int x, int y, bool white, PieceType type)
-		: r{ x }, c{ y }, is_white{ white }, type{ type } {
+	Piece(int x, int y, bool white, PieceType type, Piece* (&board)[BOARDROWS][BOARDCOLS])
+		: r{ x }, c{ y }, is_white{ white }, type{ type }, board{ board } {
 	};
 
 	void move(int x, int y) {
@@ -60,12 +62,3 @@ public:
 	vector< std::array<int, 2>> pseudoLegalMoves();
 
 };
-
-
-
-// map of board with pointers to the pieces for quick search up
-extern Piece* board[BOARDROWS][BOARDCOLS];
-
-// list of pieces to keep track of
-extern std::vector<Piece> whitePieces;
-extern std::vector<Piece> blackPieces;

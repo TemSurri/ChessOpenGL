@@ -1,17 +1,9 @@
 ﻿// main.cpp : Defines the entry point for the application.
 //
 
-#include "gameInfo.h"
-#include "pieceInfo.h"
-#include <vector>
-#include <array>
 #include "game.h"
 
-using namespace std;
 
-Piece* board[BOARDROWS][BOARDCOLS]{ nullptr }; //change this to board with objects
-std::vector<Piece> whitePieces;
-std::vector<Piece> blackPieces;
 
 int main(){
 

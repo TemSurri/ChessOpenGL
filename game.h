@@ -4,8 +4,23 @@
 
 class ClassicChess {
 
+	enum States {
+
+		Draw,
+
+		WhiteCheckMated,
+		BlackCheckMated,
+
+		WhiteChecked,
+		BlackChecked,
+
+		BlackMove,
+		WhiteMove,
+
+	};
+
 	private:
-		bool game = false;
+		States game;
 		bool white_upper = true;
 
 		Piece* board[BOARDROWS][BOARDCOLS]{nullptr};
@@ -21,11 +36,7 @@ class ClassicChess {
 		ClassicChess() {
 			
 		};
-
-		void initClassicGame();
-
-		Piece* storePiece( int r, int c, PieceType type);
-
+		//helper functions
 		void printBoard() {
 			for (int r{}; r < BOARDROWS; r++) {
 				for (int c{}; c < BOARDCOLS; c++) {
@@ -42,7 +53,6 @@ class ClassicChess {
 			};
 		};
 
-		//testmove
 		void move(int ogR, int ogC, int newR, int newC) {
 			Piece* p = board[ogR][ogC];
 			p->toString();
@@ -62,6 +72,13 @@ class ClassicChess {
 		}
 
 
+		Piece* storePiece(int r, int c, PieceType type);
+
+		void initClassicGame();
+		States calculateState();
+		
+
+		// everything hsould end up private escpet the final startGame()
 
 
 };

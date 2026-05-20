@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include "pieceInfo.h"
+#include <array>
 
 class ClassicChess {
 
@@ -14,8 +15,14 @@ class ClassicChess {
 		WhiteChecked,
 		BlackChecked,
 
-		BlackMove,
-		WhiteMove,
+		standard
+
+	};
+
+	struct MoveInfo {
+		
+		Piece* piece;
+		std::array<std::array<int, 2>, 2> move;
 
 	};
 
@@ -23,8 +30,17 @@ class ClassicChess {
 		States game;
 		bool white_upper = true;
 
+		int iterator{};
+
 		Piece* board[BOARDROWS][BOARDCOLS]{nullptr};
 
+		Piece* blackKing{ nullptr };
+		Piece* whiteKing{ nullptr };
+
+		std::vector<MoveInfo> blackMoves{};
+		std::vector<MoveInfo> whiteMoves{};
+
+		
 
 	public:
 		//public for now 
@@ -36,6 +52,7 @@ class ClassicChess {
 		ClassicChess() {
 			
 		};
+
 		//helper functions
 		void printBoard() {
 			for (int r{}; r < BOARDROWS; r++) {
@@ -53,6 +70,7 @@ class ClassicChess {
 			};
 		};
 
+		//move for testing and debuggin only
 		void move(int ogR, int ogC, int newR, int newC) {
 			Piece* p = board[ogR][ogC];
 			p->toString();
@@ -64,6 +82,23 @@ class ClassicChess {
 			// auto empties old spot isnt accurate for castling
 		};
 
+		void move(MoveInfo move) {
+
+			auto start = move.move[0];
+			auto end = move.move[1];
+
+			//piece info update
+			move.piece->move(end[0], end[1]);
+
+			//board update
+			move.piece = board[end[0]][end[1]];
+			
+			// make start empty, obv diff for castling
+			board[start[0]][start[1]] = nullptr;
+
+		};
+
+
 		void printMoves(vector<array<int, 2>> list) {
 
 			for (int i{}; i < list.size(); i++) {
@@ -71,12 +106,38 @@ class ClassicChess {
 			}
 		}
 
+		void printWholeMoves() {
+
+			for (MoveInfo move: whiteMoves) {
+
+				auto start = move.move[0];
+				auto end = move.move[1];
+
+				std::cout << "Piece("<<move.piece->getType()<<"):   " << '(' << start[0] << ', ' << start[0] << ") -->" << '(' << end[0] << ', ' << end[0] << ')' << endl;
+
+			}
+
+			for (MoveInfo move : blackMoves) {
+
+				auto start = move.move[0];
+				auto end = move.move[1];
+
+				std::cout << "Piece(" << move.piece->getType() << "):   " << '(' << start[0] << ', ' << start[0] << ") -->" << '(' << end[0] << ', ' << end[0] << ')' << endl;
+
+			}
+
+		}
 
 		Piece* storePiece(int r, int c, PieceType type);
+		void generateLegalMoves();
 
 		void initClassicGame();
+
+		States virtualMove(MoveInfo move);
 		States calculateState();
-		
+		States gameLoop();
+		States move( bool white );
+
 
 		// everything hsould end up private escpet the final startGame()
 

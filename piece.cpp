@@ -343,3 +343,4 @@ vector< std::array<int, 2>> Piece::pseudoLegalMoves() {
 		}
 	}
 }
+

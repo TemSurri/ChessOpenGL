@@ -13,13 +13,7 @@ int main(){
 	g.initClassicGame();
 	g.printBoard();
 	
-	g.whitePieces[4].toString();
-	g.printMoves(g.whitePieces[4].pseudoLegalMoves());
-
-	g.move(0, 5, 3, 3);
-	g.printMoves(g.whitePieces[4].pseudoLegalMoves());
-
-	g.printBoard();
+	g.printWholeMoves();
 
 
 	while (game) {

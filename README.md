@@ -6,16 +6,16 @@ The old engine was extremely slow and could barely handle a Minimax opponent bec
 
 ## First Optimization
 
-The first version of the engine stored pieces in a simple list and relied heavily on iteration to determine board state.
+The first version of the engine stored pieces in a python list and relied heavily on iteration to determine board state.
 So in this new c++ rewrite I introduced:
 
-  whitePieces vector
-  blackPieces vector
-  board[8][8] array storing pointers to pieces
+- whitePieces vector 
+- blackPieces vector
+- board[8][8] array storing pointers to pieces
 
 Instead of iterating through every piece to determine whether a square is occupied, the engine can now directly index the board array in constant time.
 
-### Result
+# Result
 
 - O(1) move validation, rather than having to iterate over the entire list O(n).
 - minimax searches are significiantly faster, almost instant moves.

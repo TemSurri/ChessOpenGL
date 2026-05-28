@@ -1,6 +1,7 @@
 #include "game.h"
 #include "pieceInfo.h"
 #include "vector"
+#include <iostream>
 
 Piece* ClassicChess::storePiece(int r, int c, PieceType type) {
 
@@ -122,6 +123,7 @@ ClassicChess::BoardState ClassicChess::virtualMove(MoveInfo move) {
 	//undo move
 	board[end[0]][end[1]] = taken;
 	board[start[0]][start[1]] = move.piece;
+	move.piece->move(start[0], start[1]);
 		
 	//return state
 	return state;
@@ -192,31 +194,116 @@ void ClassicChess::generateLegalMoves() {
 
 }
 
+bool ClassicChess::verifyPick(int r, int c){
 
-//ClassicChess::States ClassicChess::move(bool white) {
-	//if (white) {
-		//white move
+	if ((r>=8 || r < 0) || (c>=8 || c < 0)) {
+		return false;
+	}
 
-		//get moves
-		//get input
-		//validate input
-		//return state
+	if (board[r][c]) {
+		if (board[r][c]->getColor() == white_move)
+		{
+			return true;
+		}
+	} 
+	
+	return false;
+
+}
+
+bool ClassicChess::verifyMove(int r, int c, Piece* piece){
+
+	if ((r>=8 || r < 0) || (c>=8 || c < 0)) {
+		return false;
+	}
 
 
+	std::cout<<"exists";
+	if (white_move) {
+		for (auto move: this->whiteMoves) {
 
-	//}
-	//else {
-		//black move
+			if (move.piece == piece) {
+				std::cout<<"macthes";
+				auto coords = move.move[1];
+				std::cout<<r<<c<<coords[0]<<coords[1]<<std::endl;					
+				if ((coords[0] == r) && (coords[1] == c)) {
+					return true;
+				}
+			} 
 
-		//get moves
-		//get input
-		//validate input
-		//return state
+		}
+	}
+	
+	
+	return false;
+
+}
+
+ClassicChess::BoardState ClassicChess::move_turn() {
+
+	int req_row;
+	int req_col;
+
+	std::cout<<"Pick Piece:"<<std::endl;
+
+	std::cout<<"row : ";
+	std::cin>>req_row;
+
+	std::cout<<"col : ";
+	std::cin>>req_col;
+
+	bool pick = verifyPick(req_row, req_col);
+	while (!pick) {
+
+		std::cout<<"please Pick a valid Piece:"<<std::endl;
+
+		std::cout<<"row : ";
+		std::cin>>req_row;
+
+		std::cout<<"col : ";
+		std::cin>>req_col;
+
+		pick = verifyPick(req_row, req_col);
+		
+	}
+
+	Piece* piece = ClassicChess::board[req_row][req_col];
+	// pick works
+
+	int move_row;
+	int move_col;
+
+	std::cout<<"Move Piece:"<<std::endl;
+
+	piece->toString();
+
+	std::cout<<"row : ";
+	std::cin>>move_row;
+
+	std::cout<<"col : ";
+	std::cin>>move_col;
+
+	bool move = verifyMove(move_row, move_col, piece);
+	while (!move) {
+
+		std::cout<<"Please pick a valid move:"<<std::endl;
+
+		std::cout<<"row : ";
+		std::cin>>move_row;
+
+		std::cout<<"col : ";
+		std::cin>>move_col;
+		
+		move = verifyMove(move_row, move_col, piece);
+	}
 
 
+	//happens if eveyrhing is succesful
+	this->move(req_row, req_col, move_row, move_col);
 
-	//}
-//};
+
+};
+
 
 
 

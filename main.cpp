@@ -11,12 +11,16 @@ int main(){
 	g.initClassicGame();
 	g.printBoard();
 
-	g.move(0,2,4,4);
-	g.printBoard();
+
 	
+	g.whitePieces[1].toString();
 	g.generateLegalMoves();
 	g.printAllMoves();
 
+
+
+	g.move_turn();
+	g.printBoard();
 	
 	
 	return 0;

@@ -28,8 +28,10 @@ class ClassicChess {
 	private:
 		BoardState game;
 		bool white_upper = true;
-
 		int iterator{};
+
+		// to change every move
+		bool white_move = true;
 
 		Piece* board[BOARDROWS][BOARDCOLS]{nullptr};
 
@@ -97,7 +99,6 @@ class ClassicChess {
 
 		};
 
-
 		void printMoves(vector<array<int, 2>> list) {
 
 			for (int i{}; i < list.size(); i++) {
@@ -138,9 +139,11 @@ class ClassicChess {
 		BoardState calculateState();
 		BoardState gameLoop();
 		BoardState move( bool white );
+		BoardState move_turn();
+		bool verifyPick(int r, int c);
+		bool verifyMove(int r, int c, Piece* piece);
 
-
-		// everything hsould end up private escpet the final startGame()
+		// everything should end up private escpet the final startGame()
 
 
 };

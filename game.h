@@ -45,8 +45,8 @@ class ClassicChess {
 		Piece* blackKing{ nullptr };
 		Piece* whiteKing{ nullptr };
 
-		std::vector<MoveInfo> blackMoves{};
-		std::vector<MoveInfo> whiteMoves{};
+		std::vector<MoveInfo> legalBlackMoves{};
+		std::vector<MoveInfo> legalWhiteMoves{};
 
 		
 
@@ -102,7 +102,7 @@ class ClassicChess {
 		void printAllMoves() {
 
 			std::cout << "White Moves"<<std::endl;
-			for (MoveInfo move: whiteMoves) {
+			for (MoveInfo move: legalWhiteMoves) {
 
 				auto start = move.move[0];
 				auto end = move.move[1];
@@ -112,7 +112,7 @@ class ClassicChess {
 			}
 
 			std::cout << "Black Moves"<<std::endl;
-			for (MoveInfo move : blackMoves) {
+			for (MoveInfo move : legalBlackMoves) {
 
 				auto start = move.move[0];
 				auto end = move.move[1];
@@ -122,19 +122,22 @@ class ClassicChess {
 			}
 
 		}
-
+		//setup
 		Piece* storePiece(int r, int c, PieceType type);
+		void initClassicGame();
+
+
+		//move generation
 		bool is_checked(bool is_white);
 		bool check(bool for_white);
 		void generateLegalMoves();
-		void populateMoves();
-		void initClassicGame();
+
 		std::vector<MoveInfo> getBlackPseudoMoves();
 		std::vector<MoveInfo> getWhitePseudoMoves();
 	
 
 		bool is_pinned(Piece& p);
-		bool virtualMove(MoveInfo move);
+		bool virtualMoveCauseCheck(MoveInfo move);
 		BoardState calculateState();
 		OutCome gameLoop();
 		BoardState move( bool white );

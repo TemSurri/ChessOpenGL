@@ -70,23 +70,53 @@ void ClassicChess::initClassicGame() {
 // changing the current system from expenisve look into the future to using an outward king detection and a pin check.
 bool ClassicChess::is_checked(bool is_white) {
 	// horizontal right
-	
+	Piece* king;
+
 	if (is_white) {
-		Piece* king = whiteKing;
+		king = whiteKing;
 	} else {
-		
+		king = blackKing;
 	}
 
+	int r = king->getRow();
+	int c = king->getCol();
+	
+	//horizontal 
+
+
+
+
+
+
+
+
+
+
 
 
 }
-
-
 bool ClassicChess::is_pinned(Piece& p) {
 
+	int kingR = p.getColor() ? (whiteKing->getRow()) : (blackKing->getRow());
+	int kingC = p.getColor() ? (whiteKing->getCol()) : (blackKing->getCol());
+
+
+	if (p.getRow() == kingR) {
+		return true;
+	}
+
+	if (p.getCol() == kingC) {
+		return true;
+	}
+
+	if ((p.getCol() - p.getRow()) == (kingR - kingC)) {
+		return true;
+	}
+
+	return false;
+
 
 }
-
 bool ClassicChess::check(bool for_white) {
 	 
 	
@@ -116,8 +146,9 @@ bool ClassicChess::check(bool for_white) {
 };
 
 
+
 //a function that moves the board and then undoes the move
-bool ClassicChess::virtualMove(MoveInfo move) {
+bool ClassicChess::virtualMoveCauseCheck(MoveInfo move) {
 
 	// 1
 	auto start = move.move[0];
@@ -205,39 +236,89 @@ std::vector<ClassicChess::MoveInfo> ClassicChess::getBlackPseudoMoves() {
 //updates moves
 void ClassicChess::generateLegalMoves() {
 
-	whiteMoves = getWhitePseudoMoves();
-	blackMoves = getBlackPseudoMoves();
-	
+	auto whiteMoves = getWhitePseudoMoves();
+	auto blackMoves = getBlackPseudoMoves();
 
+	bool isWhiteChecked = is_checked(true);
+	bool isBlackChecked = is_checked(false);
+
+	// filter white moves and add to legal moves
 	for (int i{}; i < whiteMoves.size();) {
-			
-		bool legal = virtualMove(whiteMoves[i]);
 
-		if (!legal) {
-			std::cout << "checked" << std::endl;
-			whiteMoves.erase(whiteMoves.begin() + i);
-		} else {
-			i++;
+		if (isWhiteChecked) {
+			// if check then immedietaly check if move will still have check
+			bool legal = virtualMoveCauseCheck(whiteMoves[i]);
+
+			if (!legal) {
+				continue;
+			}
+			else {
+				legalWhiteMoves.push_back(whiteMoves[i]);
+			}
+		}
+		else {
+			if (!is_pinned(*whiteMoves[i].piece)) {
+				// cant affect king if moved
+				legalWhiteMoves.push_back(whiteMoves[i]);
+
+			}
+			
+			else {
+				// if it is a possible pin then check if move will result in check
+				bool legal = virtualMoveCauseCheck(whiteMoves[i]);
+
+				if (!legal) {
+					continue;
+				}
+				else {
+					legalWhiteMoves.push_back(whiteMoves[i]);
+				}
+			}
 		}
 	}
-	
-
-
-	// get all pseudo Black moves
 
 	for (int i{}; i < blackMoves.size();) {
 
-		bool legal = virtualMove(blackMoves[i]);
-		if (!legal) {
-			std::cout << "checked" << std::endl;
-			blackMoves.erase(blackMoves.begin() + i);
+		if (isWhiteChecked) {
+			// if check then immedietaly check if move will still have check
+			bool legal = virtualMoveCauseCheck(blackMoves[i]);
+
+			if (!legal) {
+				continue;
+			}
+			else {
+				legalBlackMoves.push_back(blackMoves[i]);
+			}
 		}
 		else {
-			i++;
+			if (!is_pinned(*blackMoves[i].piece)) {
+				// cant affect king if moved
+				legalBlackMoves.push_back(blackMoves[i]);
+
+			}
+
+			else {
+				// if it is a possible pin then check if move will result in check
+				bool legal = virtualMoveCauseCheck(blackMoves[i]);
+
+				if (!legal) {
+					continue;
+				}
+				else {
+					legalBlackMoves.push_back(blackMoves[i]);
+				}
+			}
 		}
 	}
+	
+
 
 }
+
+
+
+
+
 
 
 //GAME SEQUENCE
@@ -270,7 +351,7 @@ bool ClassicChess::verifyMove(int r, int c, Piece* piece){
 
 	
 	if (white_move) {
-		for (auto move: this->whiteMoves) {
+		for (auto move: this->legalWhiteMoves) {
 
 			if (move.piece == piece) {
 				
@@ -285,7 +366,7 @@ bool ClassicChess::verifyMove(int r, int c, Piece* piece){
 	}
 	else {
 
-		for (auto move : this->blackMoves) {
+		for (auto move : this->legalBlackMoves) {
 
 			if (move.piece == piece) {
 				

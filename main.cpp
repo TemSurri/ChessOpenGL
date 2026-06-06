@@ -10,13 +10,14 @@ int main() {
 
     g.initClassicGame();
 
-    g.real_move(7, 4, 2, 3);
-    g.real_move(1, 3, 3, 3);
-    g.real_move(1, 4, 5, 6);
+
+    g.real_move(6, 3, 3, 3);
+    g.real_move(1, 4, 5, 4);
     g.printBoard();
 
     g.generateLegalMoves();
-    g.printAllMoves();
+	g.printAllMoves();
+
 
     return 0;
 }

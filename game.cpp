@@ -81,6 +81,18 @@ static int directions[8][2] = {
 
 	};
 
+static int knightOffsets[8][2] {
+
+		{1, -2},
+		{1, 2},
+		{-1, -2},
+		{-1, 2},
+		{2, -1},
+		{2, 1},
+		{-2, -1},
+		{-2, 1}
+
+};
 
 // changing the current system from expenisve look into the future to using an outward king detection and a pin check.
 bool ClassicChess::is_checked(bool is_white) {
@@ -99,7 +111,7 @@ bool ClassicChess::is_checked(bool is_white) {
 	
 	PieceType enemy;
 
-	// check all directions for enemy rook + queen + rook
+	// check all directions for enemy rook + queen + rook || also check for pawn and king on first tierations
 	for (auto vector : directions) {
 		
 		if ((vector[0] == 0) || (vector[1] == 0)) {
@@ -142,9 +154,31 @@ bool ClassicChess::is_checked(bool is_white) {
 		}
 	}
 
+	// check for knight 
+	for (auto offset : knightOffsets) {
+		int row = r + offset[0];
+		int col = c + offset[1];
 
-	//gotta check for knight + king + pawn
+		if (((col) < 0 || (row) < 0) || ((col) > 7|| (row) > 7) ) {
+				break;
+			}
+		auto piece = board[row][col];
+
+		if (piece) {
+				if (piece->getColor() == is_white) {
+					// check if piece is same colors
+					break;
+						
+				} else if (piece->getType() == Knight)  {
+					std::cout<<"Check"<<"\n";
+					return true;
+				}
+			};
+	}
 	
+
+	// check for king and pawn
+
 	
 	
 

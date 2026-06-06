@@ -117,7 +117,6 @@ bool ClassicChess::is_checked(bool is_white) {
 		if ((vector[0] == 0) || (vector[1] == 0)) {
 			//straight
 			enemy = Rook;
-
 		} else {
 			//diagonal
 			enemy = Bishop;
@@ -125,6 +124,7 @@ bool ClassicChess::is_checked(bool is_white) {
 
 		//printBoard();
 		int j = 1;
+
 		while (true) {
 			// check if out of bounds
 			
@@ -159,28 +159,83 @@ bool ClassicChess::is_checked(bool is_white) {
 		int row = r + offset[0];
 		int col = c + offset[1];
 
-		if (((col) < 0 || (row) < 0) || ((col) > 7|| (row) > 7) ) {
-				break;
-			}
+		if (((col) < 0 || (row) < 0) || ((col) > 7 || (row) > 7)) {
+			continue;
+		}
+
 		auto piece = board[row][col];
 
 		if (piece) {
-				if (piece->getColor() == is_white) {
-					// check if piece is same colors
-					break;
-						
-				} else if (piece->getType() == Knight)  {
-					std::cout<<"Check"<<"\n";
-					return true;
-				}
-			};
+			if ((piece->getColor() != is_white) && (piece->getType() == Knight)) {
+				// check if piece is same colors
+				std::cout << "Check" << "\n";
+				return true;
+
+			}
+		};
 	}
-	
 
 	// check for king and pawn
+	for (auto vector : directions) {
 
-	
-	
+		int row = r + vector[0];
+		int col = c + vector[1];
+
+		if (((col) < 0 || (row) < 0) || ((col) > 7 || (row) > 7)) {
+			continue;
+		}
+
+		auto piece = board[row][col];
+		//check for king
+		if (piece) {
+			if (piece->getColor() == is_white) {
+				// check if piece is same colors
+				continue;
+			}
+			else {
+				if (piece->getType() == King) {
+					std::cout << "Check by king" << "\n";
+					return true;
+				};
+
+				if (piece->getType() == Pawn) {
+					std::cout << "enemy pawn near by" << "\n";
+					piece->toString();
+					std::cout << vector[0] << vector[1]<< "\n";
+					if ((vector[0] != 0) && (vector[1] != 0)) {
+						std::cout << "enemy pawn near by diag" << "\n";
+						
+						if (is_white == white_upper) {
+							//upper
+							if (vector[0] < 0) {
+								std::cout << "Check by pawn " << "\n";
+								return true;
+							}
+
+						}
+						else {
+							//lower
+							if (vector[0] > 0) {
+								std::cout << "Check by pawn " << "\n";
+								return true;
+							}
+
+						}
+
+					}
+
+
+
+				}
+
+			}
+				
+				
+			
+		}
+
+	}
+	return false;
 
 }
 
@@ -189,8 +244,10 @@ bool ClassicChess::is_checked(bool is_white) {
 
 bool ClassicChess::is_pinned(Piece& p) {
 
-	int kingR = p.getColor() ? (whiteKing->getRow()) : (blackKing->getRow());
-	int kingC = p.getColor() ? (whiteKing->getCol()) : (blackKing->getCol());
+	Piece* king = p.getColor() ? whiteKing : blackKing;
+
+	int kingR = king->getRow();
+	int kingC = king->getCol();
 
 
 	if (p.getRow() == kingR) {
@@ -201,7 +258,7 @@ bool ClassicChess::is_pinned(Piece& p) {
 		return true;
 	}
 
-	if ((p.getCol() - p.getRow()) == (kingR - kingC)) {
+	if (abs(p.getCol() - p.getRow()) == abs(kingC - kingR)) {
 		return true;
 	}
 
@@ -209,34 +266,6 @@ bool ClassicChess::is_pinned(Piece& p) {
 
 
 }
-bool ClassicChess::check(bool for_white) {
-	 
-	
-	if (for_white) {
-		auto black_moves = getBlackPseudoMoves();
-		//whiteKing->toString();
-		for (auto move : black_moves) {
-			//std::cout << move.move[1][0] << move.move[1][1] << std::endl;
-			if ((whiteKing->getRow() == move.move[1][0]) && (whiteKing->getCol() == move.move[1][1])) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-	else {
-		auto white_moves = getWhitePseudoMoves();
-		for (auto move : white_moves) {
-			if ((blackKing->getRow() == move.move[1][0]) && (blackKing->getCol() == move.move[1][1])) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-};
-
 
 
 //a function that moves the board and then undoes the move
@@ -345,6 +374,7 @@ void ClassicChess::generateLegalMoves() {
 
 
 	std::cout<<isWhiteChecked<<isBlackChecked<< "\n";
+	//std::cout << "hello" << "\n";
 
 	// filter white moves and add to legal moves
 	for (int i{}; i < whiteMoves.size(); i++) {
@@ -363,20 +393,26 @@ void ClassicChess::generateLegalMoves() {
 			}
 		}
 		else {
-			if (!is_pinned(*whiteMoves[i].piece)) {
+			if (!is_pinned((*whiteMoves[i].piece))) {
 				// cant affect king if moved
-				//std::cout << "not pinned" << "\n";
+				
 				legalWhiteMoves.push_back(whiteMoves[i]);
 
 			}
 			
 			else {
+				//std::cout << "pinned" << "\n";
+				//whiteMoves[i].piece->toString();
+
+
 				// if it is a possible pin then check if move will result in check
 				bool legal = virtualMoveCauseCheck(whiteMoves[i]);
 
 				if (!legal) {
 					//std::cout << "illegal" << "\n";
+					whiteMoves[i].piece->toString();
 					continue;
+
 				}
 				else {
 					//std::cout << "legal" << "\n";
@@ -389,7 +425,7 @@ void ClassicChess::generateLegalMoves() {
 	for (int i{}; i < blackMoves.size(); i++) {
 		//std::cout << i << "\n";
 
-		if (isWhiteChecked) {
+		if (isBlackChecked) {
 			// if check then immedietaly check if move will still have check
 			bool legal = virtualMoveCauseCheck(blackMoves[i]);
 
@@ -411,7 +447,7 @@ void ClassicChess::generateLegalMoves() {
 				// if it is a possible pin then check if move will result in check
 				bool legal = virtualMoveCauseCheck(blackMoves[i]);
 
-				if (!legal) {
+				if (!legal) {		
 					continue;
 				}
 				else {

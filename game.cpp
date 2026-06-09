@@ -2,6 +2,35 @@
 #include "vector"
 #include <iostream>
 
+
+void ClassicChess::printAllMoves() {
+
+	std::cout << "White Moves" << std::endl;
+	for (MoveInfo moveSet : legalWhiteMoves) {
+
+		std::array<int,2> start = { moveSet.piece->getRow(), moveSet.piece->getCol() };
+
+		for (auto end : moveSet.moves) {
+
+			std::cout << "Piece(" << moveSet.piece->getType() << "):   " << '(' << start[0] << ", " << start[1] << ") -->" << '(' << end[0] << ", " << end[1] << ')' << endl;
+
+		}
+	};
+
+	std::cout << "Black Moves" << std::endl;
+	for (MoveInfo moveSet : legalBlackMoves) {
+
+		std::array<int,2> start = { moveSet.piece->getRow(), moveSet.piece->getCol() };
+
+		for (auto end : moveSet.moves) {
+
+			std::cout << "Piece(" << moveSet.piece->getType() << "):   " << '(' << start[0] << ", " << start[1] << ") -->" << '(' << end[0] << ", " << end[1] << ')' << endl;
+
+		}
+
+	}
+
+}
 //SET UP
 
 Piece* ClassicChess::storePiece(int r, int c, PieceType type) {
@@ -244,9 +273,6 @@ bool ClassicChess::is_checked(bool is_white) {
 
 }
 
-
-
-
 bool ClassicChess::is_pinned(Piece& p) {
 
 	Piece* king = p.getColor() ? whiteKing : blackKing;
@@ -272,47 +298,6 @@ bool ClassicChess::is_pinned(Piece& p) {
 
 }
 
-
-//a function that moves the board and then undoes the move
-bool ClassicChess::virtualMoveCauseCheck(MoveInfo move) {
-	//std::cout<<"hello start of v move \n";
-	// 1
-	auto start = move.move[0];
-	auto end = move.move[1];
-
-	Piece* taken = board[end[0]][end[1]];
-
-
-
-	//piece info update
-	move.piece->move(end[0], end[1]);
-	move.piece->incrementMove();
-	board[end[0]][end[1]] = move.piece;
-	board[start[0]][start[1]] = nullptr;
-	if (taken) {
-		taken->captured = true;
-	}
-
-	
-
-	//get state
-	bool state = is_checked(move.piece->getColor());
-	//	
-	
-	//undo move
-	if (taken) {
-		taken->captured = false;
-	}
-	board[end[0]][end[1]] = taken;
-	board[start[0]][start[1]] = move.piece;
-	move.piece->move(start[0], start[1]);
-	move.piece->deincrementMove();
-	
-	//std::cout<<"end of v move \n";
-	//return state
-	return !state;
-
-}
 std::vector<ClassicChess::MoveInfo> ClassicChess::getWhitePseudoMoves() {
 	std::vector<MoveInfo> white_moves;
 
@@ -321,17 +306,20 @@ std::vector<ClassicChess::MoveInfo> ClassicChess::getWhitePseudoMoves() {
 			continue;
 		}
 
-		std::array<int, 2> start_pos = { p.getRow(), p.getCol() };
-
+		MoveInfo move;
+		move.piece = &p;
 		auto moves = p.pseudoLegalMoves();
 
 		for (auto end : moves) {
-			MoveInfo move;
-			move.piece = &p;
-			move.move = { start_pos, end };
-			white_moves.emplace_back(move);
+
+			move.moves.emplace_back(end);
+	
 		}
+
+		white_moves.emplace_back(move);
 	}
+
+	
 
 	return white_moves;
 
@@ -346,22 +334,65 @@ std::vector<ClassicChess::MoveInfo> ClassicChess::getBlackPseudoMoves() {
 			continue;
 		}
 
-		std::array<int, 2> start_pos = { p.getRow(), p.getCol() };
-
-
+		MoveInfo move;
+		move.piece = &p;
 		auto moves = p.pseudoLegalMoves();
 
 		for (auto end : moves) {
-			MoveInfo move;
-			move.piece = &p;
-			move.move = { start_pos, end };
-			black_moves.emplace_back(move);
+			
+			move.moves.emplace_back(end);
 
 		}
+		black_moves.emplace_back(move);
 	}
 	return black_moves;
 }
 
+// have to actually filter it
+void ClassicChess::filterMoveSet(ClassicChess::MoveInfo& move) {
+
+	std::array<int,2> start = { move.piece->getRow() , move.piece->getCol() };
+
+	for (int i{ static_cast<int>(move.moves.size()) }; --i >= 0;) {
+
+		auto end = move.moves[i];
+		// do move
+		Piece* taken = board[end[0]][end[1]];
+
+		move.piece->move(end[0], end[1]);
+		move.piece->incrementMove();
+		board[end[0]][end[1]] = move.piece;
+		board[start[0]][start[1]] = nullptr;
+
+		if (taken) {
+			taken->captured = true;
+		}
+
+		//get state
+		bool state = is_checked(move.piece->getColor());
+		//	
+
+		//undo move
+		if (taken) {
+			taken->captured = false;
+		}
+		board[end[0]][end[1]] = taken;
+		board[start[0]][start[1]] = move.piece;
+		move.piece->move(start[0], start[1]);
+		move.piece->deincrementMove();
+
+		if (state) {
+			
+
+			move.moves[i] = move.moves.back();
+			move.moves.pop_back();
+
+		}
+
+	}
+
+
+}
 
 //updates moves
 void ClassicChess::generateLegalMoves() {
@@ -388,9 +419,9 @@ void ClassicChess::generateLegalMoves() {
 
 		if (isWhiteChecked) {
 			// if check then immedietaly check if move will still have check
-			bool legal = virtualMoveCauseCheck(whiteMoves[i]);
+			filterMoveSet(whiteMoves[i]);
 			//std::cout << "white checked" << "\n";
-			if (!legal) {
+			if (whiteMoves[i].moves.size() == 0) {
 				continue;
 			}
 			else {
@@ -411,9 +442,9 @@ void ClassicChess::generateLegalMoves() {
 
 
 				// if it is a possible pin then check if move will result in check
-				bool legal = virtualMoveCauseCheck(whiteMoves[i]);
+				filterMoveSet(whiteMoves[i]);
 
-				if (!legal) {
+				if (whiteMoves[i].moves.size() == 0) {
 					//std::cout << "illegal" << "\n";
 					continue;
 
@@ -433,9 +464,9 @@ void ClassicChess::generateLegalMoves() {
 
 		if (isBlackChecked) {
 			// if check then immedietaly check if move will still have check
-			bool legal = virtualMoveCauseCheck(blackMoves[i]);
+			filterMoveSet(blackMoves[i]);
 
-			if (!legal) {
+			if (blackMoves[i].moves.size() == 0) {
 				//std::cout<<" Checked "<<"\n";
 				
 				continue;
@@ -454,13 +485,9 @@ void ClassicChess::generateLegalMoves() {
 			else {
 				// if it is a possible pin then check if move will result in check
 				
-				bool legal = virtualMoveCauseCheck(blackMoves[i]);
+				filterMoveSet(blackMoves[i]);
 
-				if (!legal) {	
-					
-					std::cout<<" Checked "<<blackMoves[i].move[0][0]<<blackMoves[i].move[0][1]<<blackMoves[i].move[1][0]<<blackMoves[i].move[1][1]<<"\n";
-				
-
+				if (blackMoves[i].moves.size() == 0) {
 					continue;
 				}
 				else {
@@ -469,10 +496,6 @@ void ClassicChess::generateLegalMoves() {
 			}
 		}
 	}
-
-
-	
-
 
 }
 
@@ -492,13 +515,25 @@ bool ClassicChess::verifyPick(int r, int c){
 	}
 	
 	
-	if (board[r][c]) {
-		
-		if (board[r][c]->getColor() == white_move)
-		{
-			return true;
+	if (white_move) {
+
+		for (auto moveInfo : legalWhiteMoves) {
+
+			if (moveInfo.piece == board[r][c]) {
+				return true;
+			}
+
 		}
-	} 
+	}
+	else {
+		for (auto moveInfo : legalBlackMoves) {
+
+			if (moveInfo.piece == board[r][c]) {
+				return true;
+			}
+
+		}
+	}
 	
 	return false;
 
@@ -516,10 +551,12 @@ bool ClassicChess::verifyMove(int r, int c, Piece* piece){
 
 			if (move.piece == piece) {
 				
-				auto coords = move.move[1];
-				std::cout<<r<<c<<coords[0]<<coords[1]<<std::endl;					
-				if ((coords[0] == r) && (coords[1] == c)) {
-					return true;
+				for (auto coords : move.moves) {
+
+					std::cout << r << c << coords[0] << coords[1] << std::endl;
+					if ((coords[0] == r) && (coords[1] == c)) {
+						return true;
+					}
 				}
 			} 
 
@@ -531,10 +568,12 @@ bool ClassicChess::verifyMove(int r, int c, Piece* piece){
 
 			if (move.piece == piece) {
 				
-				auto coords = move.move[1];
-				std::cout << r << c << coords[0] << coords[1] << std::endl;
-				if ((coords[0] == r) && (coords[1] == c)) {
-					return true;
+				for (auto coords : move.moves) {
+
+					std::cout << r << c << coords[0] << coords[1] << std::endl;
+					if ((coords[0] == r) && (coords[1] == c)) {
+						return true;
+					}
 				}
 			}
 

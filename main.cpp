@@ -8,15 +8,16 @@
 int main() {
     ClassicChess g;
 
-    g.initClassicGame();
+    g.gameLoop(); 
+    //g.initClassicGame();
 
 
-    g.real_move(6, 3, 3, 3);
-    g.real_move(1, 4, 5, 4);
-    g.printBoard();
+    //g.real_move(6, 3, 3, 3);
+    //g.real_move(1, 4, 5, 4);
+    //g.printBoard();
 
-    g.generateLegalMoves();
-	g.printAllMoves();
+   // g.generateLegalMoves();
+	//g.printAllMoves();
 
 
     return 0;

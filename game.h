@@ -25,11 +25,12 @@ class ClassicChess {
 		Draw
 	};
 
+	// stores ptr to piece and all its moves
 	struct MoveInfo {
 		
 		Piece* piece;
-		std::array<std::array<int, 2>, 2> move;
-
+		std::vector<std::array<int, 2>> moves;
+		
 	};
 
 	private:
@@ -45,6 +46,7 @@ class ClassicChess {
 		Piece* blackKing{ nullptr };
 		Piece* whiteKing{ nullptr };
 
+		// stores only moveable pieces and their respective moves
 		std::vector<MoveInfo> legalBlackMoves{};
 		std::vector<MoveInfo> legalWhiteMoves{};
 
@@ -102,29 +104,7 @@ class ClassicChess {
 			}
 		}
 
-		void printAllMoves() {
-
-			std::cout << "White Moves"<<std::endl;
-			for (MoveInfo move: legalWhiteMoves) {
-
-				auto start = move.move[0];
-				auto end = move.move[1];
-	
-				std::cout << "Piece("<<move.piece->getType()<<"):   " << '(' << start[0] << ", " << start[1] << ") -->" << '(' << end[0] << ", " << end[1] << ')' << endl;
-
-			}
-
-			std::cout << "Black Moves"<<std::endl;
-			for (MoveInfo move : legalBlackMoves) {
-
-				auto start = move.move[0];
-				auto end = move.move[1];
-
-				std::cout << "Piece(" << move.piece->getType() << "):   " << '(' << start[0] << ", " << start[1] << ") -->" << '(' << end[0] << ", " << end[1] << ')' << endl;
-
-			}
-
-		}
+		void printAllMoves();
 		//setup
 		Piece* storePiece(int r, int c, PieceType type);
 		void initClassicGame();
@@ -138,6 +118,7 @@ class ClassicChess {
 		std::vector<MoveInfo> getBlackPseudoMoves();
 		std::vector<MoveInfo> getWhitePseudoMoves();
 	
+		void filterMoveSet(MoveInfo& move);
 
 		bool is_pinned(Piece& p);
 		bool virtualMoveCauseCheck(MoveInfo move);

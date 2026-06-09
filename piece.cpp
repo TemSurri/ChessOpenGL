@@ -5,6 +5,9 @@
 #include <array>
 #include <cstdlib>
 #include <iterator>
+
+
+
 vector<std::array<int, 2>> Piece::oneStep() {
 
 	vector< std::array<int, 2>> straight_steps;

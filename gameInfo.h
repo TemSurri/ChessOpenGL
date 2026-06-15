@@ -21,6 +21,22 @@ enum PieceType {
 
 };
 
+enum MoveFashion : int {
+	STANDARD,
+	CASTLE,
+	PAWN_PROMOTION
+
+};
+
+struct MoveEndpoint {
+
+	int r;
+	int c;
+
+	MoveFashion fashion;
+
+};
+
 constexpr int BOARDROWS = 8;
 constexpr int BOARDCOLS = 8;
 constexpr int pieceNumber = 16;

@@ -26,10 +26,10 @@ class ClassicChess {
 	};
 
 	// stores ptr to piece and all its moves
-	struct MoveInfo {
+	struct MoveSet {
 		
 		Piece* piece;
-		std::vector<std::array<int, 2>> moves;
+		std::vector<MoveEndpoint> moves;
 		
 	};
 
@@ -47,8 +47,8 @@ class ClassicChess {
 		Piece* whiteKing{ nullptr };
 
 		// stores only moveable pieces and their respective moves
-		std::vector<MoveInfo> legalBlackMoves{};
-		std::vector<MoveInfo> legalWhiteMoves{};
+		std::vector<MoveSet> legalBlackMoves{};
+		std::vector<MoveSet> legalWhiteMoves{};
 
 		
 
@@ -97,6 +97,36 @@ class ClassicChess {
 			// auto empties old spot isnt accurate for castling
 		};
 
+		void final_move(Piece& p, MoveEndpoint move ) {
+			int ogR = p.getRow();
+			int ogC = p.getCol();
+			int newR = move.r;
+			int newC = move.c;
+
+
+			if (board[newR][newC]) {
+				board[newR][newC]->captured = true;
+			}
+
+			board[ogR][ogC]->incrementMove();
+			board[ogR][ogC]->move(newR, newC);
+			board[newR][newC] = board[ogR][ogC];
+
+
+			board[ogR][ogC] = nullptr;
+			if (move.fashion == PAWN_PROMOTION) {
+				p.changeType(Queen);
+			}
+			if (move.fashion == CASTLE) {
+				//do castle
+				std::cout << "do castle move";
+			}
+			
+			// auto empties old spot isnt accurate for castling
+		};
+
+		
+
 		void printMoves(vector<array<int, 2>> list) {
 
 			for (int i{}; i < list.size(); i++) {
@@ -115,13 +145,13 @@ class ClassicChess {
 		bool check(bool for_white);
 		void generateLegalMoves();
 
-		std::vector<MoveInfo> getBlackPseudoMoves();
-		std::vector<MoveInfo> getWhitePseudoMoves();
+		std::vector<MoveSet> getBlackPseudoMoves();
+		std::vector<MoveSet> getWhitePseudoMoves();
 	
-		void filterMoveSet(MoveInfo& move);
+		void filterMoveSet(MoveSet& move);
 
 		bool is_pinned(Piece& p);
-		bool virtualMoveCauseCheck(MoveInfo move);
+		bool virtualMoveCauseCheck(MoveSet move);
 		BoardState calculateState();
 		OutCome gameLoop();
 		BoardState move( bool white );

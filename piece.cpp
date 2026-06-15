@@ -391,3 +391,61 @@ vector< std::array<int, 2>> Piece::pseudoLegalMoves() {
 	}
 }
 
+vector< std::array<int, 2>> Piece::getCastledMoves() {
+	vector< std::array<int, 2>> theoretical_moves;
+
+	//already checked where its called in pseudo move generation but doublechecked here asw just bc
+	if (this->type != King || this->moves != 0) {
+		return theoretical_moves;
+	}
+
+	//scanning right side right
+	for (int i{1}; true; i++) {
+		if ((i+c) > 7) {
+			break;
+		}
+
+		auto p = board[r][c+i];
+		if (p) {
+
+			if ((p->getType() != Rook) || (p->getColor() != is_white)){
+				break;
+			} else {
+
+				if (p->getTimesMoved() == 0) {
+					theoretical_moves.push_back({r,c+i});
+					
+				} 
+				break;
+			}
+
+		}
+
+	};
+
+	//scan left side
+	for (int i{1}; true; i++) {
+		if ((c-i) < 0) {
+			break;
+		}
+
+		auto p = board[r][c-i];
+		if (p) {
+
+			if ((p->getType() != Rook) || (p->getColor() != is_white)){
+				break;
+			} else {
+
+				if (p->getTimesMoved() == 0) {
+					theoretical_moves.push_back({r,c-i});
+				};
+				break;
+
+			}
+
+		}
+
+	};
+
+	return theoretical_moves;
+}

@@ -68,7 +68,13 @@ public:
 	void deincrementMove() {
 		moves--;
 	}
+
+	int getTimesMoved() {
+		return moves;
+	}
+
 	// will be dependant on the type
 	vector< std::array<int, 2>> pseudoLegalMoves();
+	vector< std::array<int, 2>> getCastledMoves();
 
 };

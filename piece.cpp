@@ -37,7 +37,10 @@ vector<std::array<int, 2>> Piece::oneStep() {
 			diag_steps.push_back({ r + 1, c + 1 });
 			diag_steps.push_back({ r + 1, c - 1 });
 			if (moves == 0) {
-				straight_steps.push_back({ r + 2, c });
+				// filter double go up
+				if (!board[r+1][c]) {
+					straight_steps.push_back({ r + 2, c });
+				}
 			}
 		}
 		else {
@@ -45,9 +48,14 @@ vector<std::array<int, 2>> Piece::oneStep() {
 			diag_steps.push_back({ r - 1, c + 1 });
 			diag_steps.push_back({ r - 1, c - 1 });
 			if (moves == 0) {
-				straight_steps.push_back({ r - 2, c });
+				//filtered
+				if (!board[r-1][c]) {
+					straight_steps.push_back({ r - 2, c });
+				}
 			}
 		}
+
+
 	}
 
 	//this is where i can remove the outlier parts

@@ -416,7 +416,7 @@ std::vector<ClassicChess::MoveSet> ClassicChess::getBlackPseudoMoves() {
 }
 
 // calls is_pinned + is_checked on a moveSet to see if it is LEGAL by simulating the move and then undoing it
-void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move) {
+void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move, bool kingInCheck) {
 
 	std::array<int,2> start = { move.piece->getRow() , move.piece->getCol() };
 
@@ -431,8 +431,29 @@ void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move) {
 		
 		undo_move(move.piece, end, taken, start);
 
+		bool illegal = false;
 
-		if (check) {
+		// handle castle legality
+		if (end.fashion == CASTLE) {
+			if (kingInCheck) {
+				illegal = true;
+			}
+			else {
+
+				if (end.c > start[1]) {
+					if (is_attacked(start[0], start[1] + 1, move.piece->getColor())) {
+						illegal = true;
+					}
+				}
+				else {
+					if (is_attacked(start[0], start[1] - 1, move.piece->getColor())) {
+						illegal = true;
+					}
+				}
+			}
+		}
+
+		if (check || illegal) {
 			
 
 			move.moves[i] = move.moves.back();
@@ -444,6 +465,12 @@ void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move) {
 
 
 }
+
+
+
+
+
+
 
 // populates legalBlackMoves and legalWhiteMoves
 void ClassicChess::generateLegalMoves() {
@@ -459,7 +486,7 @@ void ClassicChess::generateLegalMoves() {
 		for (int i{}; i < whiteMoves.size(); i++) {
 
 			if (isWhiteChecked) {
-				filterMoveSet(whiteMoves[i]);
+				filterMoveSet(whiteMoves[i], isWhiteChecked);
 				if (whiteMoves[i].moves.size() == 0) {
 					continue;
 				}
@@ -476,7 +503,7 @@ void ClassicChess::generateLegalMoves() {
 				
 				else {
 					// if it is a possible pin then check if move will result in check
-					filterMoveSet(whiteMoves[i]);
+					filterMoveSet(whiteMoves[i], isWhiteChecked);
 
 					if (whiteMoves[i].moves.size() == 0) {
 						continue;
@@ -495,7 +522,7 @@ void ClassicChess::generateLegalMoves() {
 		bool isBlackChecked = is_checked(false);
 		for (int i{}; i < blackMoves.size(); i++) {
 			if (isBlackChecked) {
-				filterMoveSet(blackMoves[i]);
+				filterMoveSet(blackMoves[i], isBlackChecked);
 
 				if (blackMoves[i].moves.size() == 0) {
 					continue;
@@ -511,7 +538,7 @@ void ClassicChess::generateLegalMoves() {
 				}
 				else {
 					// if it is a possible pin then check if move will result in check
-					filterMoveSet(blackMoves[i]);
+					filterMoveSet(blackMoves[i], isBlackChecked);
 
 					if (blackMoves[i].moves.size() == 0) {
 						continue;

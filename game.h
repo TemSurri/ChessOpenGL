@@ -54,10 +54,10 @@ class ClassicChess {
 		//move
 
 		void final_move(Piece* p, MoveEndpoint move ) {
-			int ogR = p->getRow();
-			int ogC = p->getCol();
-			int newR = move.r;
-			int newC = move.c;
+			const int ogR = p->getRow();
+			const int ogC = p->getCol();
+			const int newR = move.r;
+			const int newC = move.c;
 
 			if (move.fashion == CASTLE) {
 				//do castle
@@ -85,7 +85,7 @@ class ClassicChess {
 
 				}
 				else {
-					// rook is to the right of the king
+					// rook is to the left of the king
 					board[ogR][ogC - 2] = p;
 					p->move(ogR, ogC - 2);
 					p->incrementMove();
@@ -117,8 +117,8 @@ class ClassicChess {
 			// auto empties old spot isnt accurate for castling
 		};
 		void undo_move(Piece* p, MoveEndpoint end, Piece* taken, std::array<int, 2> start) {
-			int newR = end.r;
-			int newC = end.c;
+			const int newR = end.r;
+			const int newC = end.c;
 
 
 			if (end.fashion == CASTLE && taken) {
@@ -226,7 +226,7 @@ class ClassicChess {
 		std::vector<MoveSet> getBlackPseudoMoves();
 		std::vector<MoveSet> getWhitePseudoMoves();
 	
-		void filterMoveSet(MoveSet& move);
+		void filterMoveSet(MoveSet& move, bool kingInCheck);
 
 		bool is_pinned(Piece& p);
 		bool virtualMoveCauseCheck(MoveSet move);

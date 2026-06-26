@@ -261,8 +261,6 @@ void ClassicChess::undo_move(Piece* p, MoveEndpoint end, Piece* taken, std::arra
 
 		}
 
-
-
 //MOVE GENERATION------------
 
 //vectors

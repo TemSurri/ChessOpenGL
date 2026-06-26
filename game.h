@@ -6,8 +6,6 @@
 
 // to do organize code to only need to use one array, and is turn thats all
 
-
-
 class ClassicChess {
 
 	enum OutCome {
@@ -69,8 +67,6 @@ class ClassicChess {
 		void filterMoveSet(MoveSet& move, bool kingInCheck);
 		bool is_pinned(Piece& p);
 		bool virtualMoveCauseCheck(MoveSet move);
-
-		
 
 		//Game Logic
 		OutCome calculateState();

@@ -38,8 +38,7 @@ class ClassicChess {
 		Piece* whiteKing{ nullptr };
 
 		// stores only moveable pieces and their respective moves
-		std::vector<MoveSet> legalBlackMoves{};
-		std::vector<MoveSet> legalWhiteMoves{};
+		std::vector<MoveSet> legalMoves{};
 
 		// actually store pieces
 		std::vector<Piece> whitePieces;
@@ -58,10 +57,10 @@ class ClassicChess {
 		bool check(bool for_white);
 		// checks if quadrant is attacked
 		bool is_attacked(int r, int c, bool is_white);
-		void generateLegalMoves(); // have to refator this to pass in turn
 
-		std::vector<MoveSet> getBlackPseudoMoves();
-		std::vector<MoveSet> getWhitePseudoMoves();
+		void generateLegalMoves(bool is_white);
+
+		std::vector<MoveSet> getPseudoMoves(std::vector<Piece>& pieces);
 	
 		// piece aready passed in these 3 so no need to pass in turn
 		void filterMoveSet(MoveSet& move, bool kingInCheck);

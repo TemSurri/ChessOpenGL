@@ -23,6 +23,16 @@ class ClassicChess {
 		
 	};
 
+	struct MoveRecord {
+
+		Piece* taken = nullptr;
+		Piece* moved = nullptr;
+		int startRow;
+		int startCol;
+		MoveEndpoint end;
+
+	};
+
 	private:
 		// init 
 		bool game = true;
@@ -45,8 +55,8 @@ class ClassicChess {
 		std::vector<Piece> blackPieces;
 
 		//all board manipulation
-		void final_move(Piece* p, MoveEndpoint move);
-		void undo_move(Piece* p, MoveEndpoint end, Piece* taken, std::array<int, 2> start);
+		MoveRecord final_move(Piece* p, const MoveEndpoint& move);
+		void undo_move(MoveRecord record);
 
 		//setup
 		Piece* storePiece(int r, int c, PieceType type);

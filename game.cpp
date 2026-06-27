@@ -101,11 +101,18 @@ void ClassicChess::initClassicGame() {
 
 //BOARD/PIECE OPERATIONS ---------------------
 
-void ClassicChess::final_move(Piece* p, MoveEndpoint move ) {
+ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& move ) {
 			const int ogR = p->getRow();
 			const int ogC = p->getCol();
 			const int newR = move.r;
 			const int newC = move.c;
+
+			MoveRecord record;
+			record.end = move;
+			record.taken = board[newR][newC];
+			record.moved = p;
+			record.startRow = ogR;
+			record.startCol = ogC;
 
 			if (move.fashion == CASTLE) {
 				//do castle
@@ -144,7 +151,7 @@ void ClassicChess::final_move(Piece* p, MoveEndpoint move ) {
 
 				}
 
-				return;
+				return record;
 			}
 
 
@@ -169,63 +176,72 @@ void ClassicChess::final_move(Piece* p, MoveEndpoint move ) {
 			};
 			
 			// auto empties old spot isnt accurate for castling
+
+			return record;
+			
 		};
 
-void ClassicChess::undo_move(Piece* p, MoveEndpoint end, Piece* taken, std::array<int, 2> start) {
-			const int newR = end.r;
-			const int newC = end.c;
+void ClassicChess::undo_move(MoveRecord record) {
+			
+			
+			const auto p = record.moved;
+			const int newR = record.end.r;
+			const int newC = record.end.c;
+			const int oldR = record.startRow;
+			const int oldC = record.startCol;
+			const MoveFashion fashion = record.end.fashion;
 
-			if (end.fashion == EN_PASSENT) {
+			if (fashion == EN_PASSENT) {
 
-				board[end.r][start[1]] = taken;
-				board[start[0]][start[1]] = p;
+				board[newR][oldC] = record.taken;
+				board[oldR][oldC] = p;
 
-				p->move(start[0], start[1]);
+				p->move(oldR, oldC);
 				p->deincrementMove();	
 				
 			};
 
-			if (end.fashion == CASTLE && taken) {
+			if (fashion == CASTLE && record.taken) {
 				//remove the caslte things
-				board[end.r][end.c] = taken;
-				board[start[0]][start[1]] = p;
-				p->move(start[0], start[1]);
+				board[newR][newC] = record.taken;
+				board[oldR][oldC] = p;
+				p->move(oldR, oldC);
 				p->deincrementMove();
 
 				// in this case the taken is the rook that moved
-				taken->move(end.r, end.c);
-				taken->deincrementMove();
+				record.taken->move(newR, newC);
+				record.taken->deincrementMove();
 
 				// clear the moved spots
-				if (newC > start[1]) {
+				if (newC > oldC) {
 					// rook is to the right of the king
-					board[start[0]][start[1] + 2] = nullptr;
+					board[oldR][oldC + 2] = nullptr;
 
-					board[start[0]][start[1] + 2 - 1] = nullptr;
+					board[oldR][oldC + 2 - 1] = nullptr;
 
 				}
 				else {
 					// rook is to the right of the king
-					board[start[0]][start[1] - 2] = nullptr;
+					board[oldR][oldC - 2] = nullptr;
 
 
-					board[start[0]][start[1] - 2 + 1] = nullptr;
+					board[oldR][oldC - 2 + 1] = nullptr;
 
 				}
 
 				return;
 			}
 
-			if (end.fashion == PAWN_PROMOTION) {
+			if (fashion == PAWN_PROMOTION) {
 
-				if (taken) {
-					taken->captured = false;
+				if (record.taken) {
+					record.taken->captured = false;
 				}
 
 				p->changeType(Pawn);
-				board[end.r][end.c] = taken;
-				board[start[0]][start[1]] = p;
-				p->move(start[0], start[1]);
+				board[newR][newC] = record.taken;
+				board[oldR][oldC] = p;
+				p->move(oldR, oldC);
 				p->deincrementMove();
 
 				return;
@@ -233,15 +249,15 @@ void ClassicChess::undo_move(Piece* p, MoveEndpoint end, Piece* taken, std::arra
 			}
 
 			// might laso just encompass undo castle logic
-			if (end.fashion == STANDARD) {
+			if (fashion == STANDARD) {
 
-				if (taken) {
-					taken->captured = false;
+				if (record.taken) {
+					record.taken->captured = false;
 				}
 
-				board[end.r][end.c] = taken;
-				board[start[0]][start[1]] = p;
-				p->move(start[0], start[1]);
+				board[newR][newC] = record.taken;
+				board[oldR][oldC] = p;
+				p->move(oldR, oldC);
 				p->deincrementMove();
 
 				return;
@@ -535,23 +551,21 @@ void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move, bool kingInCheck) 
 	for (int i{ static_cast<int>(move.moves.size()) }; --i >= 0;) {
 
 		auto end = move.moves[i];
-		Piece* taken = board[end.r][end.c];
 
-		final_move(move.piece, end);
-
+		//handle check legality
+		MoveRecord record = final_move(move.piece, move.moves[i]);
 		bool check = is_checked(move.piece->getColor());
+		undo_move(record);
+
 		
-		undo_move(move.piece, end, taken, start);
 
+		//handle castle legality
 		bool illegal = false;
-
-		// handle castle legality
 		if (end.fashion == CASTLE) {
 			if (kingInCheck) {
 				illegal = true;
 			}
 			else {
-
 				if (end.c > start[1]) {
 					if (is_attacked(start[0], start[1] + 1, move.piece->getColor())) {
 						illegal = true;
@@ -567,7 +581,6 @@ void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move, bool kingInCheck) 
 
 		if (check || illegal) {
 			
-
 			move.moves[i] = move.moves.back();
 			move.moves.pop_back();
 

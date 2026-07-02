@@ -21,6 +21,7 @@ enum PieceType {
 
 };
 
+
 enum MoveFashion : int {
 	STANDARD,
 	CASTLE,
@@ -33,8 +34,8 @@ struct MoveEndpoint {
 
 	int r;
 	int c;
-
 	MoveFashion fashion;
+	
 
 };
 

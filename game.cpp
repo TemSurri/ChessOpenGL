@@ -527,7 +527,7 @@ std::vector<ClassicChess::MoveSet> ClassicChess::getPseudoMoves(std::vector<Piec
 		}
 
 		if (p.getType() == Pawn && ((p.getTimesMoved() == 2 || p.getTimesMoved() == 3))) {
-			std::cout << "CAlled enpassent" << std::endl;
+			
 			for (auto end : p.getEnPassent()) {
 				MoveEndpoint e;
 				e.r = end[0];
@@ -765,7 +765,7 @@ void ClassicChess::gameLoop() {
 
 	while (this->game) {
 
-
+		std::cout << "VALUE OF BOARD:" << evaluateBoard() << std::endl;
 		printBoard();
 		generateLegalMoves(white_move);
 		printAllMoves();

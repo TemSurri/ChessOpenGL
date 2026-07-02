@@ -23,6 +23,15 @@ class ClassicChess {
 		
 	};
 
+	struct EvaluatedMove {
+		// value of minimax after it was searched
+		int value;
+
+		Piece* piece = nullptr;
+		MoveEndpoint move;
+
+	};
+
 	struct MoveRecord {
 
 		Piece* taken = nullptr;
@@ -97,5 +106,13 @@ class ClassicChess {
 		void gameLoop();
 
 
-
+		
+		//minimax 
+		
+		int evaluateBoard();
+		EvaluatedMove getBestMove(int depth, bool maximizing);
+		int minimax(int depth, bool maximizing);
+		const int whiteMaximizing = true;
+		std::vector<MoveSet> ClassicChess::generateLegalMovesNode(bool is_white);
+		
 };

@@ -102,6 +102,7 @@ void ClassicChess::initClassicGame() {
 //BOARD/PIECE OPERATIONS ---------------------
 
 ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& move ) {
+
 			const int ogR = p->getRow();
 			const int ogC = p->getCol();
 			const int newR = move.r;
@@ -109,10 +110,33 @@ ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& 
 
 			MoveRecord record;
 			record.end = move;
-			record.taken = board[newR][newC];
+
+
+			if (move.fashion == EN_PASSENT) {
+				record.taken = board[ogR][newC];
+			}
+			else {
+				record.taken = board[newR][newC];
+			}
+
 			record.moved = p;
 			record.startRow = ogR;
 			record.startCol = ogC;
+
+			if (move.fashion == EN_PASSENT) {
+				if (record.taken) {
+					record.taken->captured = true;
+				}
+
+				board[ogR][newC] = nullptr; // remove captured pawn
+				board[ogR][ogC] = nullptr;  // clear old square
+
+				p->incrementMove();
+				p->move(newR, newC);
+				board[newR][newC] = p;
+
+				return record;
+			}
 
 			if (move.fashion == CASTLE) {
 				//do castle
@@ -159,6 +183,7 @@ ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& 
 				board[newR][newC]->captured = true;
 			}
 
+
 			board[ogR][ogC]->incrementMove();
 			board[ogR][ogC]->move(newR, newC);
 			board[newR][newC] = board[ogR][ogC];
@@ -192,13 +217,21 @@ void ClassicChess::undo_move(MoveRecord record) {
 			const MoveFashion fashion = record.end.fashion;
 
 			if (fashion == EN_PASSENT) {
+				board[newR][newC] = nullptr;
 
-				board[newR][oldC] = record.taken;
+				board[oldR][newC] = record.taken;
+				if (record.taken) {
+					record.taken->captured = false;
+				}
+
+
 				board[oldR][oldC] = p;
-
 				p->move(oldR, oldC);
-				p->deincrementMove();	
-				
+				p->deincrementMove();
+
+
+
+				return;
 			};
 
 			if (fashion == CASTLE && record.taken) {
@@ -406,31 +439,31 @@ bool ClassicChess::is_attacked(int r, int c, bool is_white) {
 			}
 			else {
 				if (piece->getType() == King) {
-					std::cout << "Check by king" << "\n";
+					
 					return true;
 				};
 				
 				if (piece->getType() == Pawn) {
-					std::cout << "enemy pawn near by" << "\n";
+					
 					//piece->toString();
-					std::cout << vector[0] << vector[1]<< "\n";
+					
 					if ((vector[0] != 0) && (vector[1] != 0)) {
-						std::cout << "enemy pawn near by diag" << "\n";
+						
 						
 						if (is_white == white_upper) {
 							//upper
-							std::cout << "upper " << "\n";
+							
 							if (vector[0] > 0) {
-								std::cout << "Check by pawn " << "\n";
+								
 								return true;
 							}
 
 						}
 						else {
 							//lower
-							std::cout << "lower " << "\n";
+							
 							if (vector[0] < 0) {
-								std::cout << "Check by pawn " << "\n";
+								
 								return true;
 							}
 
@@ -803,7 +836,64 @@ void ClassicChess::gameLoop() {
 	}
 }
 
+void ClassicChess::gameLoopVSminimaxAI(bool whiteIsAi, int depth) {
 
+	initClassicGame();
+
+	while (this->game) {
+
+		std::cout << "VALUE OF BOARD:" << evaluateBoard() << std::endl;
+		printBoard();
+		generateLegalMoves(white_move);
+		printAllMoves();
+
+		auto outCome = calculateState();
+		std::cout << "outcome : " << outCome << endl;
+		if (outCome != Normal) {
+			if (outCome == BlackWin) {
+				std::cout << "Black wins by checkmate\n";
+			}
+			else if (outCome == WhiteWin) {
+				std::cout << "White wins by checkmate\n";
+			}
+			else if (outCome == Draw) {
+				std::cout << "Draw by stalemate\n";
+			}
+			game = false;
+			return;
+		}
+
+		//white always starts
+
+		bool ai_move = (whiteIsAi == white_move);
+		if (ai_move) {
+			auto bestMove = getBestMove(depth, (white_move == whiteMaximizing));
+			final_move(bestMove.piece, bestMove.move);
+
+
+			//ai move
+
+		}
+		else {
+
+			bool turn = move_turn();
+			
+
+
+		}
+
+		iterator += 1;
+		if (white_move) {
+			white_move = false;
+		}
+		else {
+			white_move = true;
+		}
+
+
+		// calgulare the state
+	}
+}
 
 
 

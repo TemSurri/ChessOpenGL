@@ -92,6 +92,13 @@ class ClassicChess {
 		bool verifyPick(int r, int c);
 		std::variant<bool, MoveEndpoint> verifyMove(int r, int c, Piece* piece);
 
+		// ai stuff
+		int evaluateBoard();
+		EvaluatedMove getBestMove(int depth, bool maximizing);
+		int minimax(int depth, bool maximizing);
+		const int whiteMaximizing = true;
+		std::vector<MoveSet> ClassicChess::generateLegalMovesNode(bool is_white);
+
 
 	public:
 
@@ -104,15 +111,12 @@ class ClassicChess {
 		void printBoard();
 
 		void gameLoop();
+		void gameLoopVSminimaxAI(bool whiteIsAi, int depth);
 
 
 		
 		//minimax 
 		
-		int evaluateBoard();
-		EvaluatedMove getBestMove(int depth, bool maximizing);
-		int minimax(int depth, bool maximizing);
-		const int whiteMaximizing = true;
-		std::vector<MoveSet> ClassicChess::generateLegalMovesNode(bool is_white);
+	
 		
 };

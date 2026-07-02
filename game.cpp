@@ -386,9 +386,12 @@ bool ClassicChess::is_attacked(int r, int c, bool is_white) {
 					// check if piece is same colors
 					break;
 						
-				} else if (piece->getType() == enemy || piece->getType() == Queen)  {
+				} else {
+					if (piece->getType() == enemy || piece->getType() == Queen)  {
 					
-					return true;
+						return true;
+					}
+					break;
 				}
 			};
 

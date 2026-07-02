@@ -61,20 +61,30 @@ int ClassicChess::evaluateBoard() {
 // big issue array circular dependence
 ClassicChess::EvaluatedMove ClassicChess::getBestMove(int depth, bool whiteToMove) {
     // moves already generated
-    EvaluatedMove alpha;
+
+    int alpha = -100000;
+    int beta = 100000;
+
+
+    EvaluatedMove best;
     bool maximizing = (whiteToMove == whiteMaximizing);
     if (maximizing) {
-        alpha.value = -100000;
+        best.value = -100000;
         for (auto& move : legalMoves) {
             for (auto& endpoint : move.moves) {
                 MoveRecord mrecord = final_move(move.piece, endpoint);
-                int beta = minimax(depth - 1, !whiteToMove);
+                int cur_val = minimax(depth - 1, !whiteToMove, alpha, beta);
                 undo_move(mrecord);
 
-                if (beta >= alpha.value) {
-                    alpha = {
-                        beta, move.piece, endpoint
+                if (cur_val > best.value) {
+                    best = {
+                        cur_val, move.piece, endpoint
                     }; 
+                }
+
+
+                if (best.value > alpha) {
+                    alpha = best.value;
                 }
 
             }
@@ -83,17 +93,22 @@ ClassicChess::EvaluatedMove ClassicChess::getBestMove(int depth, bool whiteToMov
     }
 
     else {
-        alpha.value = 100000;
+        best.value = 100000;
         for (auto& move : legalMoves) {
             for (auto& endpoint : move.moves) {
                 MoveRecord mrecord = final_move(move.piece, endpoint);
-                int beta = minimax(depth - 1, !whiteToMove);
+                int cur_val = minimax(depth - 1, !whiteToMove, alpha, beta);
+
                 undo_move(mrecord);
 
-                if (beta <= alpha.value) {
-                    alpha = {
-                        beta, move.piece, endpoint
+                if (cur_val < best.value) {
+                    best = {
+                        cur_val, move.piece, endpoint
                     };
+                }
+
+                if (best.value < beta) {
+                    beta = best.value;
                 }
 
             }
@@ -101,11 +116,11 @@ ClassicChess::EvaluatedMove ClassicChess::getBestMove(int depth, bool whiteToMov
 
     }
 
-    return alpha;
+    return best;
 
 }
-// no alpha beta pruning yet, it will reuire another paramter which is the alpha.value of the higher layer
-int ClassicChess::minimax(int depth, bool whiteToMove) {
+
+int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
     
     if (depth == 0) {
         return evaluateBoard();
@@ -115,7 +130,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove) {
     //generate moves
     // it will generate the moves for the side that is max or min depending on input
     auto legal_moves_node = generateLegalMovesNode(whiteToMove);
-    int alpha;
+    int best;
 
     bool maximizing = (whiteToMove == whiteMaximizing);
 
@@ -128,7 +143,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove) {
         }
 
         //alpha = vsmall#
-        alpha = -100000;
+        best = -100000;
         //for move in moves
         //  do move
         //  beta = minimax(move, p, depth-1, !maximizing)
@@ -137,13 +152,24 @@ int ClassicChess::minimax(int depth, bool whiteToMove) {
         
         for (auto& move : legal_moves_node) {
             for (auto& endpoint : move.moves) {
+
                 MoveRecord mrecord = final_move(move.piece, endpoint);
-                int beta = minimax(depth - 1, !whiteToMove);
+                int cur_val = minimax(depth - 1, !whiteToMove, alpha, beta);
                 undo_move(mrecord);
 
-                if (beta >= alpha) {
-                    alpha = beta;
+
+                if (cur_val > best) {
+                    best = cur_val;
+                }           
+
+                if (best > alpha) {
+                    alpha = best;
                 }
+
+                if (alpha >= beta) {
+                    return best;
+                }
+
             }
         }
 
@@ -161,17 +187,27 @@ int ClassicChess::minimax(int depth, bool whiteToMove) {
             return 0; // stalemate
         }
 
-        alpha = 100000;
+        best = 100000;
        
         for (auto& move : legal_moves_node) {
             for (auto& endpoint : move.moves) {
                 MoveRecord mrecord = final_move(move.piece, endpoint);
-                int beta = minimax(depth - 1, !whiteToMove);
+                int cur_val = minimax(depth - 1, !whiteToMove, alpha, beta);
                 undo_move(mrecord);
 
-                if (beta <= alpha) {
-                    alpha = beta;
+                if (cur_val < best) {
+                    best = cur_val;
                 }
+
+                if (best < beta) {
+                    beta = best;
+                }
+
+                if (beta <= alpha) {
+                    return best;
+                }
+
+
             }
         }
 
@@ -179,6 +215,6 @@ int ClassicChess::minimax(int depth, bool whiteToMove) {
 
     }
    
-    return alpha;
+    return best;
 }
 

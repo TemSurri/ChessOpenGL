@@ -95,7 +95,7 @@ class ClassicChess {
 		// ai stuff
 		int evaluateBoard();
 		EvaluatedMove getBestMove(int depth, bool maximizing);
-		int minimax(int depth, bool maximizing);
+		int minimax(int depth, bool maximizing, int alpha, int beta);
 		const int whiteMaximizing = true;
 		std::vector<MoveSet> ClassicChess::generateLegalMovesNode(bool is_white);
 

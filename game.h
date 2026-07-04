@@ -15,10 +15,18 @@ class ClassicChess {
 		Normal
 	};
 
+	enum MoveBunch :int {
+		TT,
+		CAPTURES,
+		KM,
+		QUIET
+	};
+
+	//multi purpose for move batches, TT, captures, killer moves, quiet moves. For orderingmoves in minimax
 	// stores ptr to piece and all its moves
 	struct MoveSet {
 		
-		Piece* piece;
+		
 		std::vector<MoveEndpoint> moves;
 		
 	};
@@ -26,8 +34,6 @@ class ClassicChess {
 	struct EvaluatedMove {
 		// value of minimax after it was searched
 		int value;
-
-		Piece* piece = nullptr;
 		MoveEndpoint move;
 
 	};
@@ -64,7 +70,7 @@ class ClassicChess {
 		std::vector<Piece> blackPieces;
 
 		//all board manipulation
-		MoveRecord final_move(Piece* p, const MoveEndpoint& move);
+		MoveRecord final_move(const MoveEndpoint& move);
 		void undo_move(MoveRecord record);
 
 		//setup
@@ -82,7 +88,7 @@ class ClassicChess {
 		std::vector<MoveSet> getPseudoMoves(std::vector<Piece>& pieces);
 	
 		// piece aready passed in these 3 so no need to pass in turn
-		void filterMoveSet(MoveSet& move, bool kingInCheck);
+		void filterMoveSet(MoveSet& move, bool kingInCheck, Piece* piece);
 		bool is_pinned(Piece& p);
 		bool virtualMoveCauseCheck(MoveSet move);
 
@@ -94,10 +100,12 @@ class ClassicChess {
 
 		// ai stuff
 		int evaluateBoard();
+		MoveBunch analyzeMove(MoveEndpoint& move);
 		EvaluatedMove getBestMove(int depth, bool maximizing);
 		int minimax(int depth, bool maximizing, int alpha, int beta);
 		const int whiteMaximizing = true;
-		std::vector<MoveSet> ClassicChess::generateLegalMovesNode(bool is_white);
+		std::vector<MoveSet> generateLegalMovesNode(bool is_white);
+		std::array<MoveSet, 4> GenerateOrderedLegalMoves(bool is_white);
 
 
 	public:

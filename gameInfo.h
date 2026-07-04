@@ -7,6 +7,7 @@
 #include <array>
 
 
+
 // TODO: Reference additional headers your program requires here.
 
 enum PieceType {
@@ -30,12 +31,16 @@ enum MoveFashion : int {
 
 };
 
+class Piece;
+
 struct MoveEndpoint {
 
 	int r;
 	int c;
 	MoveFashion fashion;
-	
+	int value;
+
+	Piece* p;
 
 };
 

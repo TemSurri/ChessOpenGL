@@ -10,11 +10,12 @@ void ClassicChess::printAllMoves() {
 	std::cout << white_move << std::endl;
 	for (MoveSet moveSet : legalMoves) {
 
-		std::array<int,2> start = { moveSet.piece->getRow(), moveSet.piece->getCol() };
+		
 
 		for (auto end : moveSet.moves) {
+			std::array<int, 2> start = { end.p->getRow(), end.p->getCol() };
 
-			std::cout << "Piece(" << moveSet.piece->getType() << "):   " << '(' << start[0] << ", " << start[1] << ") -->" << '(' << end.r << ", " << end.c << ')' << end.fashion<< endl;
+			std::cout << "Piece(" << end.p->getType() << "):   " << '(' << start[0] << ", " << start[1] << ") -->" << '(' << end.r << ", " << end.c << ')' << end.fashion<< endl;
 
 		}
 	};
@@ -101,10 +102,10 @@ void ClassicChess::initClassicGame() {
 
 //BOARD/PIECE OPERATIONS ---------------------
 
-ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& move ) {
+ClassicChess::MoveRecord ClassicChess::final_move(const MoveEndpoint& move ) {
 
-			const int ogR = p->getRow();
-			const int ogC = p->getCol();
+			const int ogR = move.p->getRow();
+			const int ogC = move.p->getCol();
 			const int newR = move.r;
 			const int newC = move.c;
 
@@ -119,7 +120,7 @@ ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& 
 				record.taken = board[newR][newC];
 			}
 
-			record.moved = p;
+			record.moved = move.p;
 			record.startRow = ogR;
 			record.startCol = ogC;
 
@@ -131,9 +132,9 @@ ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& 
 				board[ogR][newC] = nullptr; // remove captured pawn
 				board[ogR][ogC] = nullptr;  // clear old square
 
-				p->incrementMove();
-				p->move(newR, newC);
-				board[newR][newC] = p;
+				move.p->incrementMove();
+				move.p->move(newR, newC);
+				board[newR][newC] = move.p;
 
 				return record;
 			}
@@ -154,9 +155,9 @@ ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& 
 
 				if (newC > ogC) {
 					// rook is to the right of the king
-					board[ogR][ogC + 2] = p;
-					p->move(ogR, ogC + 2);
-					p->incrementMove();
+					board[ogR][ogC + 2] = move.p;
+					move.p->move(ogR, ogC + 2);
+					move.p->incrementMove();
 
 					board[ogR][ogC + 2 - 1] = rookToCastle;
 					rookToCastle->move(ogR, ogC + 2 - 1);
@@ -165,9 +166,9 @@ ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& 
 				}
 				else {
 					// rook is to the left of the king
-					board[ogR][ogC - 2] = p;
-					p->move(ogR, ogC - 2);
-					p->incrementMove();
+					board[ogR][ogC - 2] = move.p;
+					move.p->move(ogR, ogC - 2);
+					move.p->incrementMove();
 
 					board[ogR][ogC - 2 + 1] = rookToCastle;
 					rookToCastle->move(ogR, ogC - 2 + 1);
@@ -191,7 +192,7 @@ ClassicChess::MoveRecord ClassicChess::final_move(Piece* p, const MoveEndpoint& 
 			board[ogR][ogC] = nullptr;
 
 			if (move.fashion == PAWN_PROMOTION) {
-				p->changeType(PieceType::Queen);
+				move.p->changeType(PieceType::Queen);
 			}
 
 			if (move.fashion == EN_PASSENT) {
@@ -480,8 +481,6 @@ bool ClassicChess::is_attacked(int r, int c, bool is_white) {
 
 			}
 				
-				
-			
 		}
 
 	}
@@ -527,7 +526,6 @@ std::vector<ClassicChess::MoveSet> ClassicChess::getPseudoMoves(std::vector<Piec
 		}
 
 		MoveSet move;
-		move.piece = &p;
 		auto moves = p.pseudoLegalMoves();
 
 		for (auto end : moves) {
@@ -535,6 +533,7 @@ std::vector<ClassicChess::MoveSet> ClassicChess::getPseudoMoves(std::vector<Piec
 			MoveEndpoint e;
 			e.r = end[0];
 			e.c = end[1];
+			e.p = &p;
 
 			// pawn promotion
 			if (p.getType() == Pawn && (e.r == 0 || e.r == 7)) {
@@ -557,6 +556,7 @@ std::vector<ClassicChess::MoveSet> ClassicChess::getPseudoMoves(std::vector<Piec
 				e.r = end[0];
 				e.c = end[1];
 				e.fashion = CASTLE;
+				e.p = &p;
 				move.moves.emplace_back(e);
 
 			}
@@ -569,6 +569,7 @@ std::vector<ClassicChess::MoveSet> ClassicChess::getPseudoMoves(std::vector<Piec
 				e.r = end[0];
 				e.c = end[1];
 				e.fashion = EN_PASSENT;
+				e.p = &p;
 				move.moves.emplace_back(e);
 			}
 
@@ -580,17 +581,17 @@ std::vector<ClassicChess::MoveSet> ClassicChess::getPseudoMoves(std::vector<Piec
 }
 
 // calls is_pinned + is_checked on a moveSet to see if it is LEGAL by simulating the move and then undoing it
-void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move, bool kingInCheck) {
+void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move, bool kingInCheck, Piece* piece) {
 
-	std::array<int,2> start = { move.piece->getRow() , move.piece->getCol() };
+	std::array<int,2> start = { piece->getRow() , piece->getCol() };
 
 	for (int i{ static_cast<int>(move.moves.size()) }; --i >= 0;) {
 
 		auto end = move.moves[i];
 
 		//handle check legality
-		MoveRecord record = final_move(move.piece, move.moves[i]);
-		bool check = is_checked(move.piece->getColor());
+		MoveRecord record = final_move(move.moves[i]);
+		bool check = is_checked(piece->getColor());
 		undo_move(record);
 
 		
@@ -603,12 +604,12 @@ void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move, bool kingInCheck) 
 			}
 			else {
 				if (end.c > start[1]) {
-					if (is_attacked(start[0], start[1] + 1, move.piece->getColor())) {
+					if (is_attacked(start[0], start[1] + 1, piece->getColor())) {
 						illegal = true;
 					}
 				}
 				else {
-					if (is_attacked(start[0], start[1] - 1, move.piece->getColor())) {
+					if (is_attacked(start[0], start[1] - 1, piece->getColor())) {
 						illegal = true;
 					}
 				}
@@ -641,8 +642,9 @@ void ClassicChess::generateLegalMoves(bool is_white) {
 			continue;
 		}
 
-		if (isChecked || is_pinned((*pmoves[i].piece))) {
-			filterMoveSet(pmoves[i], isChecked);
+		// only need to check for the first move, as all as of now per batch will be of the same piece
+		if (isChecked || is_pinned((*pmoves[i].moves[0].p))) {
+			filterMoveSet(pmoves[i], isChecked, pmoves[i].moves[0].p);
 		}
 
 		if (pmoves[i].moves.size() > 0) {
@@ -678,14 +680,14 @@ bool ClassicChess::verifyPick(int r, int c){
 		return false;
 	}
 	
-	for (auto &moveInfo : legalMoves) {
-		
+	for (auto& moveSet : legalMoves) {
+		for (auto& move : moveSet.moves) {
 
-		if (moveInfo.piece == board[r][c]) {
+			if (move.p == board[r][c]) {
 
-			return true;
+				return true;
+			}
 		}
-
 	}
 	
 	
@@ -701,21 +703,17 @@ std::variant<bool, MoveEndpoint> ClassicChess::verifyMove(int r, int c, Piece* p
 
 	
 
-	for (auto &move: this->legalMoves) {
+	for (auto &moveSet: this->legalMoves) {
 
-		if (move.piece == piece) {
 				
-			for (auto coords : move.moves) {
+		for (auto move : moveSet.moves) {
 
-				std::cout << r << c << coords.r << coords.c << std::endl;
-				if ((coords.r == r) && (coords.c == c)) {
-					return coords;
-				}
+				
+			if (((move.r == r) && (move.c == c)) && (piece == move.p)){
+				return move;
 			}
-		} 
-
-	}
-	
+		}
+	} 
 	
 	return false;
 
@@ -788,7 +786,7 @@ bool ClassicChess::move_turn() {
 
 	//happens if eveyrhing is succesful
 	MoveEndpoint fmove = std::get<MoveEndpoint>(move);
-	this->final_move(piece, fmove);
+	this->final_move(fmove);
 	
 	return true;
 
@@ -871,7 +869,7 @@ void ClassicChess::gameLoopVSminimaxAI(bool whiteIsAi, int depth) {
 		bool ai_move = (whiteIsAi == white_move);
 		if (ai_move) {
 			auto bestMove = getBestMove(depth, (white_move == whiteMaximizing));
-			final_move(bestMove.piece, bestMove.move);
+			final_move(bestMove.move);
 
 
 			//ai move

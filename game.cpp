@@ -628,30 +628,6 @@ void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move, bool kingInCheck, 
 
 }
 
-// NEW DUAL DYANIUMCI MOVES
-void ClassicChess::generateLegalMoves(bool is_white) {
-
-	legalMoves.clear();
-
-	bool isChecked = is_checked(is_white);
-	auto pmoves = is_white ? (getPseudoMoves(whitePieces)) : (getPseudoMoves(blackPieces));
-
-	for (int i{}; i < pmoves.size(); i++) {
-
-		if (pmoves[i].moves.size() == 0) {
-			continue;
-		}
-
-		// only need to check for the first move, as all as of now per batch will be of the same piece
-		if (isChecked || is_pinned((*pmoves[i].moves[0].p))) {
-			filterMoveSet(pmoves[i], isChecked, pmoves[i].moves[0].p);
-		}
-
-		if (pmoves[i].moves.size() > 0) {
-			legalMoves.push_back(pmoves[i]);
-		}
-	}
-}
 //GAME SEQUENCE------------
 
 ClassicChess::OutCome ClassicChess::calculateState() {
@@ -801,7 +777,7 @@ void ClassicChess::gameLoop() {
 
 		std::cout << "VALUE OF BOARD:" << evaluateBoard() << std::endl;
 		printBoard();
-		generateLegalMoves(white_move);
+		legalMoves = GenerateOrderedLegalMoves(white_move);
 		printAllMoves();
 
 		auto outCome = calculateState();
@@ -845,7 +821,7 @@ void ClassicChess::gameLoopVSminimaxAI(bool whiteIsAi, int depth) {
 
 		std::cout << "VALUE OF BOARD:" << evaluateBoard() << std::endl;
 		printBoard();
-		generateLegalMoves(white_move);
+		legalMoves = GenerateOrderedLegalMoves(white_move);
 		printAllMoves();
 
 		auto outCome = calculateState();

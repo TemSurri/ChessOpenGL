@@ -3,6 +3,8 @@
 #include "piece.h"
 #include <array>
 #include <variant>
+#include <unordered_map>
+#include <cstdint>
 
 // to do organize code to only need to use one array, and is turn thats all
 
@@ -14,6 +16,8 @@ class ClassicChess {
 		Draw,
 		Normal
 	};
+
+
 
 	enum MoveBunch :int {
 		TT,
@@ -63,7 +67,7 @@ class ClassicChess {
 		Piece* whiteKing{ nullptr };
 
 		// stores only moveable pieces and their respective moves
-		std::vector<MoveSet> legalMoves{};
+		std::array<MoveSet, 4> legalMoves{};
 
 		// actually store pieces
 		std::vector<Piece> whitePieces;
@@ -83,7 +87,7 @@ class ClassicChess {
 		// checks if quadrant is attacked
 		bool is_attacked(int r, int c, bool is_white);
 
-		void generateLegalMoves(bool is_white);
+		
 
 		std::vector<MoveSet> getPseudoMoves(std::vector<Piece>& pieces);
 	
@@ -99,14 +103,33 @@ class ClassicChess {
 		std::variant<bool, MoveEndpoint> verifyMove(int r, int c, Piece* piece);
 
 		// ai stuff
+
+		enum FLAG {
+			EXACT,
+			UPPER_BOUND,
+			LOWER_BOUND
+		};
+
+		struct TTEntry {
+			MoveEndpoint move;
+			int depth;
+			int score;
+			FLAG bound_type;
+		};
+
+
 		int evaluateBoard();
 		MoveBunch analyzeMove(MoveEndpoint& move);
 		EvaluatedMove getBestMove(int depth, bool maximizing);
 		int minimax(int depth, bool maximizing, int alpha, int beta);
 		const int whiteMaximizing = true;
-		std::vector<MoveSet> generateLegalMovesNode(bool is_white);
+		
 		std::array<MoveSet, 4> GenerateOrderedLegalMoves(bool is_white);
-
+	
+		uint64_t getHashCode();
+		std::unordered_map<uint64_t, TTEntry> transpositionalTable;
+		// can generate hash itself : main function to add to TT
+		void cacheEntryTT(const MoveEndpoint& move, int score, int depth, bool maximizing, bool pruned);
 
 	public:
 

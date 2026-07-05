@@ -14,31 +14,6 @@ constexpr std::array<int, 7> pieceValues = {
     20000
 };
 
-std::vector<ClassicChess::MoveSet> ClassicChess::generateLegalMovesNode(bool is_white) {
-
-    bool isChecked = is_checked(is_white);
-    auto pmoves = is_white ? (getPseudoMoves(whitePieces)) : (getPseudoMoves(blackPieces));
-
-    std::vector<MoveSet> legalMoves;
-
-    for (int i{}; i < pmoves.size(); i++) {
-
-        if (pmoves[i].moves.size() == 0) {
-            continue;
-        }
-
-        if (isChecked || is_pinned((*pmoves[i].moves[0].p))) {
-            filterMoveSet(pmoves[i], isChecked, pmoves[i].moves[0].p);
-        }
-
-        if (pmoves[i].moves.size() > 0) {
-            legalMoves.push_back(pmoves[i]);
-        }
-    }
-
-    return legalMoves;
-}
-
 int ClassicChess::evaluateBoard() {
     int boardValue{};
 
@@ -238,6 +213,37 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
    
     return best;
 }
+
+// generate a unique hash from board state
+uint64_t ClassicChess::getHashCode() {
+
+    return 2;
+};
+
+// NEED TO IMPLEMENT IT IN THE MINIMAX : not yet though
+void ClassicChess::cacheEntryTT(const MoveEndpoint& move, int score, int depth, bool maximizing, bool pruned) {
+
+    TTEntry entry;
+    entry.move = move;
+    entry.depth = depth;
+    entry.score = score;
+    
+    // logic for FLAG
+    if (pruned) {
+        if (maximizing) {
+            entry.bound_type = LOWER_BOUND;
+        }
+        else {
+            entry.bound_type = UPPER_BOUND;
+        }
+    }
+    else {
+        entry.bound_type = EXACT;
+    }
+
+    transpositionalTable[getHashCode()] = entry;
+
+};
 
 // will decipher whether or not move is one of TT, capture, km, quiet
 // if capture, befor the function returns it will by ref change the value of the move object

@@ -93,9 +93,66 @@ void ClassicChess::generate_king_moves(std::vector<Move>& moves, bool white)
 	}
 }
 
+void ClassicChess::generate_bishop_moves(std::vector<Move>& moves, bool is_white)
+{
+	static constexpr int dirs[4] = {
+		NORTH_EAST,
+		NORTH_WEST,
+		SOUTH_EAST,
+		SOUTH_WEST
+	};
 
+	generate_sliding_moves(
+		moves,
+		is_white ? w_bishops : b_bishops,
+		is_white,
+		is_white ? W_BISHOP : B_BISHOP,
+		dirs,
+		4
+	);
+}
 
+void ClassicChess::generate_rook_moves(std::vector<Move>& moves, bool is_white)
+{
+	static constexpr int dirs[4] = {
+		NORTH,
+		SOUTH,
+		EAST,
+		WEST
+	};
 
+	generate_sliding_moves(
+		moves,
+		is_white ? w_rooks : b_rooks,
+		is_white,
+		is_white ? W_ROOK : B_ROOK,
+		dirs,
+		4
+	);
+}
+
+void ClassicChess::generate_queen_moves(std::vector<Move>& moves, bool is_white)
+{
+	static constexpr int dirs[8] = {
+		NORTH,
+		SOUTH,
+		EAST,
+		WEST,
+		NORTH_EAST,
+		NORTH_WEST,
+		SOUTH_EAST,
+		SOUTH_WEST
+	};
+
+	generate_sliding_moves(
+		moves,
+		is_white ? w_queen : b_queen,
+		is_white,
+		is_white ? W_QUEEN : B_QUEEN,
+		dirs,
+		8
+	);
+}
 
 
 

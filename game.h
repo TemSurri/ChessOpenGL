@@ -438,23 +438,19 @@ class ClassicChess {
 		{
 			switch (piece)
 			{
-			case W_PAWN:
-			case B_PAWN:   return 'P';
+			case W_PAWN:   return 'P';
+			case W_KNIGHT: return 'N';
+			case W_BISHOP: return 'B';
+			case W_ROOK:   return 'R';
+			case W_QUEEN:  return 'Q';
+			case W_KING:   return 'K';
 
-			case W_KNIGHT:
-			case B_KNIGHT: return 'N';
-
-			case W_BISHOP:
-			case B_BISHOP: return 'B';
-
-			case W_ROOK:
-			case B_ROOK:   return 'R';
-
-			case W_QUEEN:
-			case B_QUEEN:  return 'Q';
-
-			case W_KING:
-			case B_KING:   return 'K';
+			case B_PAWN:   return 'p';
+			case B_KNIGHT: return 'n';
+			case B_BISHOP: return 'b';
+			case B_ROOK:   return 'r';
+			case B_QUEEN:  return 'q';
+			case B_KING:   return 'k';
 
 			default:
 				return '?';
@@ -503,6 +499,7 @@ class ClassicChess {
 			auto moves = generate_pseudo_moves(true);
 			print_moves(moves);
 		}
+		
 
 		//MOVE GENERATION
 
@@ -568,24 +565,27 @@ class ClassicChess {
 			{
 				generate_pawn_moves(moves, true);
 				generate_knight_moves(moves, true);
-				//generate_bishop_moves(moves, true);
-				//generate_rook_moves(moves, true);
-				//generate_queen_moves(moves, true);
+				generate_bishop_moves(moves, true);
+				generate_rook_moves(moves, true);
+				generate_queen_moves(moves, true);
 				generate_king_moves(moves, true);
 			}
 			else
 			{
 				generate_pawn_moves(moves, false);
 				generate_knight_moves(moves, false);
-				//generate_bishop_moves(moves, false);
-				//generate_rook_moves(moves, false);
-				//generate_queen_moves(moves, false);
+				generate_bishop_moves(moves, false);
+				generate_rook_moves(moves, false);
+				generate_queen_moves(moves, false);
 				generate_king_moves(moves, false);
 			}
 
 			return moves;
 		}
 		
+
+		// MOVE GENERATION HELPERS
+		//-------------------------------------
 		// removes the lowest right most bit. 
 		inline int pop_lsb(uint64_t& bitboard)
 		{
@@ -599,8 +599,15 @@ class ClassicChess {
 		{
 			return (bitboard >> square) & 1ULL;
 		}
+		//-------------------------------------
+		
+		
+		
+		//pawn logic
 
 		void generate_pawn_moves(std::vector<Move>& moves, bool is_white);
+
+		//precomputed pieces logic
 
 		void generate_knight_moves(std::vector<Move>& moves, bool is_white);
 		uint64_t knight_attacks[64];
@@ -633,9 +640,6 @@ class ClassicChess {
 			}
 		}
 
-		//void generate_bishop_moves(std::vector<Move>& moves, bool is_white);
-		//void generate_rook_moves(std::vector<Move>& moves, bool is_white);
-		//void generate_queen_moves(std::vector<Move>& moves, bool is_white);
 		void generate_king_moves(std::vector<Move>& moves, bool is_white);
 		uint64_t king_attacks[64];
 		// need to init at start of program
@@ -665,5 +669,74 @@ class ClassicChess {
 				king_attacks[square] = attacks;
 			}
 		}
+		
+
+		//sliding pieces logic
+		inline bool is_valid_slide(int from, int to, int dir)
+		{
+			if (to < 0 || to >= 64)
+				return false;
+
+			int fromFile = from % 8;
+			int toFile = to % 8;
+
+			// moving east means file must increase by 1
+			if (dir == EAST || dir == NORTH_EAST || dir == SOUTH_EAST)
+				return toFile == fromFile + 1;
+
+			// moving west means file must decrease by 1
+			if (dir == WEST || dir == NORTH_WEST || dir == SOUTH_WEST)
+				return toFile == fromFile - 1;
+
+			// north/south file stays the same
+			return toFile == fromFile;
+		}
+		void generate_sliding_moves(
+			std::vector<Move>& moves,
+			uint64_t pieces,
+			bool is_white,
+			PieceTypeBit pieceType,
+			const int* dirs,
+			int dirCount
+		)
+		{
+			uint64_t own = is_white ? w_occupancy : b_occupancy;
+			uint64_t enemy = is_white ? b_occupancy : w_occupancy;
+
+			while (pieces)
+			{
+				int from = pop_lsb(pieces);
+
+				for (int i = 0; i < dirCount; i++)
+				{
+					int dir = dirs[i];
+					int current = from;
+
+					while (true)
+					{
+						int to = current + dir;
+
+						if (!is_valid_slide(current, to, dir))
+							break;
+
+						uint64_t toMask = 1ULL << to;
+
+						if (own & toMask)
+							break;
+
+						add_move(moves, from, to, pieceType);
+
+						if (enemy & toMask)
+							break;
+
+						current = to;
+					}
+				}
+			}
+		}
+
+		void generate_bishop_moves(std::vector<Move>& moves, bool is_white);
+		void generate_rook_moves(std::vector<Move>& moves, bool is_white);
+		void generate_queen_moves(std::vector<Move>& moves, bool is_white);
 		
 };

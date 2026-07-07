@@ -8,7 +8,7 @@
 int main() {
     ClassicChess g;
     
-    g.test_in_main();
+    g.gameLoop();
 
     return 0;
 }

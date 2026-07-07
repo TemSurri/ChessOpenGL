@@ -98,11 +98,7 @@ class ClassicChess {
 		//Game Logic
 		//refactor  maybe
 		bool hasLegalMoves();
-		OutCome calculateState();
-		bool move_turn();
-		bool verifyPick(int r, int c);
-		std::variant<bool, MoveEndpoint> verifyMove(int r, int c, Piece* piece);
-
+		
 		// MINIMAX AI STUFF
 		// TT caching
 		//refactor
@@ -240,13 +236,40 @@ class ClassicChess {
 			B_PAWN, B_KNIGHT, B_BISHOP, B_ROOK, B_QUEEN, B_KING
 		};
 
+		enum MoveType {
+			NORMAL_MOVE,
+			PROMOTION_MOVE,
+			EN_PASSANT_MOVE,
+			CASTLING_MOVE
+		};
+
 		struct Move {
 			int from;
 			int to;
 
 			PieceTypeBit moved;
 			PieceTypeBit captured = NO_PIECE;
+
+			MoveType type = NORMAL_MOVE;
 		};
+
+		struct BBMoveRecord {
+			Move move;
+
+			int oldEnPassantSquare;
+
+			bool oldWhiteCastleKingSide;
+			bool oldWhiteCastleQueenSide;
+			bool oldBlackCastleKingSide;
+			bool oldBlackCastleQueenSide;
+		};
+
+		int en_passant_square = -1;
+
+		bool white_can_castle_kingside = true;
+		bool white_can_castle_queenside = true;
+		bool black_can_castle_kingside = true;
+		bool black_can_castle_queenside = true;
 
 		static constexpr int NORTH = 8;
 		static constexpr int SOUTH = -8;
@@ -283,42 +306,175 @@ class ClassicChess {
 			}
 		}
 
-		void exec_move(Move move)
+		BBMoveRecord exec_move(const Move& move)
 		{
+			BBMoveRecord record;
+			record.move = move;
+
+			record.oldEnPassantSquare = en_passant_square;
+			record.oldWhiteCastleKingSide = white_can_castle_kingside;
+			record.oldWhiteCastleQueenSide = white_can_castle_queenside;
+			record.oldBlackCastleKingSide = black_can_castle_kingside;
+			record.oldBlackCastleQueenSide = black_can_castle_queenside;
+
 			uint64_t fromMask = 1ULL << move.from;
 			uint64_t toMask = 1ULL << move.to;
 
-			// remove captured piece if there is one
-			if (move.captured != NO_PIECE)
+			en_passant_square = -1;
+
+			if (move.type == EN_PASSANT_MOVE)
 			{
-				get_piece_board(move.captured) &= ~toMask;
+				uint64_t& movingBoard = get_piece_board(move.moved);
+
+				movingBoard &= ~fromMask;
+				movingBoard |= toMask;
+
+				int capturedSquare = (move.moved == W_PAWN) ? move.to - 8 : move.to + 8;
+				get_piece_board(move.captured) &= ~(1ULL << capturedSquare);
+			}
+			else if (move.type == PROMOTION_MOVE)
+			{
+				get_piece_board(move.moved) &= ~fromMask;
+
+				if (move.captured != NO_PIECE)
+					get_piece_board(move.captured) &= ~toMask;
+
+				PieceTypeBit promoted = (move.moved == W_PAWN) ? W_QUEEN : B_QUEEN;
+				get_piece_board(promoted) |= toMask;
+			}
+			else if (move.type == CASTLING_MOVE)
+			{
+				uint64_t& kingBoard = get_piece_board(move.moved);
+
+				kingBoard &= ~fromMask;
+				kingBoard |= toMask;
+
+				if (move.to == 6) {
+					w_rooks &= ~(1ULL << 7);
+					w_rooks |= 1ULL << 5;
+				}
+				else if (move.to == 2) {
+					w_rooks &= ~(1ULL << 0);
+					w_rooks |= 1ULL << 3;
+				}
+				else if (move.to == 62) {
+					b_rooks &= ~(1ULL << 63);
+					b_rooks |= 1ULL << 61;
+				}
+				else if (move.to == 58) {
+					b_rooks &= ~(1ULL << 56);
+					b_rooks |= 1ULL << 59;
+				}
+			}
+			else
+			{
+				if (move.captured != NO_PIECE)
+					get_piece_board(move.captured) &= ~toMask;
+
+				uint64_t& movingBoard = get_piece_board(move.moved);
+
+				movingBoard &= ~fromMask;
+				movingBoard |= toMask;
+
+				if (move.moved == W_PAWN && move.to - move.from == 16)
+					en_passant_square = move.from + 8;
+
+				if (move.moved == B_PAWN && move.from - move.to == 16)
+					en_passant_square = move.from - 8;
 			}
 
-			// move piece
-			uint64_t& board = get_piece_board(move.moved);
+			// update castling rights
+			if (move.moved == W_KING) {
+				white_can_castle_kingside = false;
+				white_can_castle_queenside = false;
+			}
+			else if (move.moved == B_KING) {
+				black_can_castle_kingside = false;
+				black_can_castle_queenside = false;
+			}
 
-			board &= ~fromMask; // remove from old square
-			board |= toMask;    // place on new square
+			if (move.moved == W_ROOK && move.from == 0) white_can_castle_queenside = false;
+			if (move.moved == W_ROOK && move.from == 7) white_can_castle_kingside = false;
+			if (move.moved == B_ROOK && move.from == 56) black_can_castle_queenside = false;
+			if (move.moved == B_ROOK && move.from == 63) black_can_castle_kingside = false;
+
+			if (move.captured == W_ROOK && move.to == 0) white_can_castle_queenside = false;
+			if (move.captured == W_ROOK && move.to == 7) white_can_castle_kingside = false;
+			if (move.captured == B_ROOK && move.to == 56) black_can_castle_queenside = false;
+			if (move.captured == B_ROOK && move.to == 63) black_can_castle_kingside = false;
 
 			updateOccupancy();
+			return record;
 		}
 
-		void undo_move(Move move)
+		void undo_move(const BBMoveRecord& record)
 		{
+			const Move& move = record.move;
+
 			uint64_t fromMask = 1ULL << move.from;
 			uint64_t toMask = 1ULL << move.to;
 
-			// move piece back
-			uint64_t& board = get_piece_board(move.moved);
-
-			board &= ~toMask;
-			board |= fromMask;
-
-			// restore captured piece
-			if (move.captured != NO_PIECE)
+			if (move.type == EN_PASSANT_MOVE)
 			{
-				get_piece_board(move.captured) |= toMask;
+				uint64_t& movingBoard = get_piece_board(move.moved);
+
+				movingBoard &= ~toMask;
+				movingBoard |= fromMask;
+
+				int capturedSquare = (move.moved == W_PAWN) ? move.to - 8 : move.to + 8;
+				get_piece_board(move.captured) |= 1ULL << capturedSquare;
 			}
+			else if (move.type == PROMOTION_MOVE)
+			{
+				PieceTypeBit promoted = (move.moved == W_PAWN) ? W_QUEEN : B_QUEEN;
+
+				get_piece_board(promoted) &= ~toMask;
+				get_piece_board(move.moved) |= fromMask;
+
+				if (move.captured != NO_PIECE)
+					get_piece_board(move.captured) |= toMask;
+			}
+			else if (move.type == CASTLING_MOVE)
+			{
+				uint64_t& kingBoard = get_piece_board(move.moved);
+
+				kingBoard &= ~toMask;
+				kingBoard |= fromMask;
+
+				if (move.to == 6) {
+					w_rooks &= ~(1ULL << 5);
+					w_rooks |= 1ULL << 7;
+				}
+				else if (move.to == 2) {
+					w_rooks &= ~(1ULL << 3);
+					w_rooks |= 1ULL << 0;
+				}
+				else if (move.to == 62) {
+					b_rooks &= ~(1ULL << 61);
+					b_rooks |= 1ULL << 63;
+				}
+				else if (move.to == 58) {
+					b_rooks &= ~(1ULL << 59);
+					b_rooks |= 1ULL << 56;
+				}
+			}
+			else
+			{
+				uint64_t& movingBoard = get_piece_board(move.moved);
+
+				movingBoard &= ~toMask;
+				movingBoard |= fromMask;
+
+				if (move.captured != NO_PIECE)
+					get_piece_board(move.captured) |= toMask;
+			}
+
+			en_passant_square = record.oldEnPassantSquare;
+
+			white_can_castle_kingside = record.oldWhiteCastleKingSide;
+			white_can_castle_queenside = record.oldWhiteCastleQueenSide;
+			black_can_castle_kingside = record.oldBlackCastleKingSide;
+			black_can_castle_queenside = record.oldBlackCastleQueenSide;
 
 			updateOccupancy();
 		}
@@ -499,7 +655,8 @@ class ClassicChess {
 			auto moves = generate_pseudo_moves(true);
 			print_moves(moves);
 		}
-		
+
+		int inline row_col_to_square(int row, int col);
 
 		//MOVE GENERATION
 
@@ -553,7 +710,6 @@ class ClassicChess {
 			return empty & mask;
 		}
 
-
 		std::vector<Move> generate_pseudo_moves(bool whiteToMove)
 		{
 			std::vector<Move> moves;
@@ -583,8 +739,7 @@ class ClassicChess {
 			return moves;
 		}
 		
-
-		// MOVE GENERATION HELPERS
+		// MOVE GENERATION HELPERS VERY IMPORTANT
 		//-------------------------------------
 		// removes the lowest right most bit. 
 		inline int pop_lsb(uint64_t& bitboard)
@@ -602,9 +757,23 @@ class ClassicChess {
 		//-------------------------------------
 		
 		
-		
 		//pawn logic
+		void add_pawn_move(std::vector<Move>& moves, int from, int to, PieceTypeBit pawnType)
+		{
+			Move m;
+			m.from = from;
+			m.to = to;
+			m.moved = pawnType;
+			m.captured = piece_on_square(to);
 
+			if ((pawnType == W_PAWN && to >= 56) ||
+				(pawnType == B_PAWN && to <= 7))
+			{
+				m.type = PROMOTION_MOVE; // auto queen
+			}
+
+			moves.push_back(m);
+		}
 		void generate_pawn_moves(std::vector<Move>& moves, bool is_white);
 
 		//precomputed pieces logic
@@ -669,7 +838,7 @@ class ClassicChess {
 				king_attacks[square] = attacks;
 			}
 		}
-		
+		void add_castling_moves(std::vector<Move>& moves, bool is_white);
 
 		//sliding pieces logic
 		inline bool is_valid_slide(int from, int to, int dir)
@@ -738,5 +907,91 @@ class ClassicChess {
 		void generate_bishop_moves(std::vector<Move>& moves, bool is_white);
 		void generate_rook_moves(std::vector<Move>& moves, bool is_white);
 		void generate_queen_moves(std::vector<Move>& moves, bool is_white);
-		
+
+		//MOVE FILTERING (LEGAL MOVE GENERATION)
+
+		int get_king_square(bool white)
+		{
+			uint64_t king = white ? w_king : b_king;
+
+			if (!king)
+				return -1;
+
+			return std::countr_zero(king);
+		}
+
+		bool is_king_in_check(bool whiteKing)
+		{
+			int kingSquare = get_king_square(whiteKing);
+
+			if (kingSquare == -1)
+				return false;
+
+			return is_square_attacked(kingSquare, !whiteKing);
+		}
+
+		bool is_square_attacked_by_sliders(int square, bool byWhite);
+		bool is_square_attacked(int square, bool byWhite);
+
+		std::vector<Move> generate_legal_moves(bool whiteToMove)
+		{
+			std::vector<Move> pseudoMoves = generate_pseudo_moves(whiteToMove);
+
+			std::vector<Move> legalMoves;
+			legalMoves.reserve(pseudoMoves.size());
+
+			bool currentlyInCheck = is_king_in_check(whiteToMove);
+
+			for (const Move& move : pseudoMoves)
+			{
+				if (!currentlyInCheck && !can_be_pinned_to_king(move.from, whiteToMove))
+				{
+					legalMoves.push_back(move);
+					continue;
+				}
+
+				auto record = exec_move(move);
+
+				if (!is_king_in_check(whiteToMove))
+				{
+					legalMoves.push_back(move);
+				}
+
+				undo_move(record);
+			}
+
+			return legalMoves;
+		}
+
+		bool can_be_pinned_to_king(int from, bool white)
+		{
+			int kingSquare = get_king_square(white);
+
+			if (kingSquare == -1)
+				return true;
+
+			int fromRank = from / 8;
+			int fromFile = from % 8;
+
+			int kingRank = kingSquare / 8;
+			int kingFile = kingSquare % 8;
+
+			// same file
+			if (fromFile == kingFile)
+				return true;
+
+			// same rank
+			if (fromRank == kingRank)
+				return true;
+
+			// same diagonal
+			if (std::abs(fromRank - kingRank) == std::abs(fromFile - kingFile))
+				return true;
+
+			return false;
+		};
+
+
+
+	
 };

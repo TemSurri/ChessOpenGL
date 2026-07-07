@@ -42,6 +42,7 @@ int ClassicChess::evaluateBoard() {
 
 // wraps root search for iterative deepening
 ClassicChess::EvaluatedMove ClassicChess::getBestMoveIterative(int maxDepth, bool whiteToMove) {
+    clearKillerMoves();
     resetSearchStats();
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -59,7 +60,7 @@ ClassicChess::EvaluatedMove ClassicChess::getBestMoveIterative(int maxDepth, boo
             ttMove = cached.move;
         }
 
-        legalMoves = GenerateOrderedLegalMoves(whiteToMove, ttMove, hasTT);
+        legalMoves = GenerateOrderedLegalMoves(whiteToMove, ttMove, hasTT, depth);
 
         best = searchRoot(depth, whiteToMove);
 
@@ -155,8 +156,9 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
 
     //tt lookup
     uint64_t key = getHashCode(whiteToMove);
-    TTEntry& cached = transpositionalTable[key % TTsize];
+    TTEntry& cached = transpositionalTable[key & (TTsize - 1)];
     MoveEndpoint orderTT{};
+    
 
     if (cached.id == key) {
         //store TT move
@@ -189,7 +191,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
     entry.whitemove = whiteToMove;
    
     //generate moves
-    auto legal_moves_node = GenerateOrderedLegalMoves(whiteToMove, orderTT, cached.id == key);
+    auto legal_moves_node = GenerateOrderedLegalMoves(whiteToMove, orderTT, cached.id == key, depth);
     int best;
     
     MoveEndpoint bestMove{};
@@ -238,9 +240,13 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
                 if (alpha >= beta) {
                     stats.alphaBetaCutoffs++;
 
-                    //  cache as lowerbound
+                    // store killer move
+                    storeKillerMove(endpoint, depth);
+
+                    // cache as lowerbound
                     entry.bound_type = LOWER_BOUND;
                     entry.score = best;
+                    entry.id = key;
                     entry.move = endpoint;
                     cacheEntryTT(entry);
                     stats.ttStores++;
@@ -292,10 +298,14 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
 
                 if (beta <= alpha) {
                     stats.alphaBetaCutoffs++;
+                    
+                    // store killer move
+                    storeKillerMove(endpoint, depth);
 
                     //  cache as upper bound
                     entry.bound_type = UPPER_BOUND;
                     entry.score = best;
+                    entry.id = key;
                     entry.move = endpoint;
                     cacheEntryTT(entry);
                     stats.ttStores++;
@@ -310,6 +320,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
     entry.bound_type = EXACT;
     entry.score = best;
     entry.move = bestMove;
+    entry.id = key;
     cacheEntryTT(entry);
     stats.ttStores++;
     return best;
@@ -347,13 +358,10 @@ uint64_t ClassicChess::getHashCode(bool whitemove) {
 
 // add entry to TT table
 void ClassicChess::cacheEntryTT(TTEntry entry) {
-    uint64_t key = getHashCode(entry.whitemove);
-    int index = key % TTsize;
+  
+    int index = entry.id & (TTsize - 1);
 
-    entry.id = key;
-
-
-    if ((transpositionalTable[index].id == key) && transpositionalTable[index].depth > entry.depth) {
+    if ((transpositionalTable[index].id == entry.id) && transpositionalTable[index].depth > entry.depth) {
         return;
     };
 
@@ -362,47 +370,62 @@ void ClassicChess::cacheEntryTT(TTEntry entry) {
 };
 
 //MOVE ORDERING --------
+bool ClassicChess::isCaptureMove(const MoveEndpoint& move) const {
+    return move.fashion == EN_PASSENT || board[move.r][move.c] != nullptr;
+}
+
+void ClassicChess::storeKillerMove(const MoveEndpoint& move, int depth) {
+    if (depth < 0 || depth >= MAX_SEARCH_DEPTH) return;
+    if (isCaptureMove(move)) return;
+
+    if (killerValid[depth][0] && sameMove(move, killerMoves[depth][0])) return;
+
+    killerMoves[depth][1] = killerMoves[depth][0];
+    killerValid[depth][1] = killerValid[depth][0];
+
+    killerMoves[depth][0] = move;
+    killerValid[depth][0] = true;
+}
+
+void ClassicChess::clearKillerMoves() {
+    killerValid = {};
+}
 
 // analyze which batch a move belongs in
-ClassicChess::MoveBunch ClassicChess::analyzeMove(MoveEndpoint& move, const MoveEndpoint TTmove, bool isTT) {
+ClassicChess::MoveBunch ClassicChess::analyzeMove(MoveEndpoint& move, const MoveEndpoint& TTmove, bool isTT, int depth) {
 
 
-    if (isTT) {
-
-        if (sameMove(move, TTmove)) {
-
-            return TT;
-
-
-        }
-
-
-
+    if (isTT && sameMove(move, TTmove)) {
+        return TT;
     }
 
+    if (isCaptureMove(move)) {
+        Piece* taken = board[move.r][move.c];
 
-    //check for Capture
-    Piece* taken = board[move.r][move.c];
-    if (taken) {
+        int value = taken
+            ? pieceValues[taken->getType()] * 5 - pieceValues[move.p->getType()]
+            : pieceValues[Pawn] * 5 - pieceValues[move.p->getType()];
 
-        // capture
-        // simple heuristic(aim for worse piece takes better), later make this call a heuristic function if i add more coplexity
-        int value = pieceValues[taken->getType()]*5 - pieceValues[move.p->getType()];
         move.value = value;
         return CAPTURES;
-
     }
-    else {
 
-        //check if killer move : TODO not implemented yet
+    if (depth >= 0 && depth < MAX_SEARCH_DEPTH) {
+        if (killerValid[depth][0] && sameMove(move, killerMoves[depth][0])) {
+            stats.killerHits++;
+            move.value = 900000;
+            return KM;
+        }
 
-
-
-
-        //regular quiet move
-        move.value = 0;
-        return QUIET;
+        if (killerValid[depth][1] && sameMove(move, killerMoves[depth][1])) {
+            stats.killerHits++;
+            move.value = 800000;
+            return KM;
+        }
     }
+
+    move.value = 0;
+    return QUIET;
 
    
 
@@ -411,7 +434,7 @@ ClassicChess::MoveBunch ClassicChess::analyzeMove(MoveEndpoint& move, const Move
 }
 
 // generate an array with movesets ordered by TT move, Captures, Killer Moves, Quiet Moves
-std::array<ClassicChess::MoveSet,4> ClassicChess::GenerateOrderedLegalMoves(bool is_white, const MoveEndpoint TTmove, bool isTT) {
+std::array<ClassicChess::MoveSet,4> ClassicChess::GenerateOrderedLegalMoves(bool is_white, const MoveEndpoint& TTmove, bool isTT, int depth) {
 
     bool isChecked = is_checked(is_white);
     auto pmoves = is_white ? (getPseudoMoves(whitePieces)) : (getPseudoMoves(blackPieces));
@@ -435,7 +458,7 @@ std::array<ClassicChess::MoveSet,4> ClassicChess::GenerateOrderedLegalMoves(bool
             // its a legal move
             for (auto& move : pmoves[i].moves) {
 
-                MoveBunch category = analyzeMove(move, TTmove, isTT);
+                MoveBunch category = analyzeMove(move, TTmove, isTT, depth);
 
                 orderedLegalMoves[category].moves.push_back(move);
 
@@ -475,6 +498,7 @@ void ClassicChess::printSearchStats(int depth) {
     std::cout << "Cutoffs:        " << stats.alphaBetaCutoffs << '\n';
     std::cout << "TT Hits:        " << stats.ttHits << '\n';
     std::cout << "TT Stores:      " << stats.ttStores << '\n';
+    std::cout << "Killer Hits:    " << stats.killerHits << '\n';
 
     if (stats.elapsedMs > 0.0) {
         double nps =

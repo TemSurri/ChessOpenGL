@@ -153,13 +153,13 @@ class ClassicChess {
 
 		// MOVE ORDERING
 		int evaluateBoard();
-		MoveBunch analyzeMove(MoveEndpoint& move, const MoveEndpoint TTmove, bool isTT);
+		MoveBunch analyzeMove(MoveEndpoint& move, const MoveEndpoint& TTmove, bool isTT, int depth);
 		EvaluatedMove searchRoot(int depth, bool whiteToMove);
 		EvaluatedMove getBestMoveIterative(int maxDepth, bool whiteToMove);
 		int minimax(int depth, bool maximizing, int alpha, int beta);
 		const int whiteMaximizing = true;
 		
-		std::array<MoveSet, 4> GenerateOrderedLegalMoves(bool is_white, const MoveEndpoint TTmove, bool isTT);
+		std::array<MoveSet, 4> GenerateOrderedLegalMoves(bool is_white, const MoveEndpoint& TTmove, bool isTT, int depth);
 		
 		static constexpr size_t TTsize = 1 << 20;
 		uint64_t getHashCode(bool whitemove);
@@ -173,6 +173,7 @@ class ClassicChess {
 			uint64_t alphaBetaCutoffs = 0;
 			uint64_t ttHits = 0;
 			uint64_t ttStores = 0;
+			uint64_t killerHits = 0;
 
 			double elapsedMs = 0.0;
 		};
@@ -182,6 +183,15 @@ class ClassicChess {
 		void resetSearchStats();
 		void printSearchStats(int depth);
 
+		//Killer moevs (quiet(non capture) moves that show some strat)
+		static constexpr int MAX_SEARCH_DEPTH = 10;
+
+		std::array<std::array<MoveEndpoint, 2>, MAX_SEARCH_DEPTH> killerMoves{};
+		std::array<std::array<bool, 2>, MAX_SEARCH_DEPTH> killerValid{};
+
+		bool isCaptureMove(const MoveEndpoint& move) const;
+		void storeKillerMove(const MoveEndpoint& move, int depth);
+		void clearKillerMoves();
 	public:
 
 		ClassicChess() :transpositionalTable(TTsize) {

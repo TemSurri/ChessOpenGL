@@ -794,7 +794,7 @@ void ClassicChess::gameLoop() {
 
 
 
-		legalMoves = GenerateOrderedLegalMoves(white_move, MoveEndpoint{}, false);
+		legalMoves = GenerateOrderedLegalMoves(white_move, MoveEndpoint{}, false, 0);
 		printAllMoves();
 
 		auto outCome = calculateState();
@@ -855,7 +855,7 @@ void ClassicChess::gameLoopVSminimaxAI(bool whiteIsAi, int depth) {
 
 
 
-		legalMoves = GenerateOrderedLegalMoves(white_move, orderTT, hasTT);
+		legalMoves = GenerateOrderedLegalMoves(white_move, orderTT, hasTT, depth);
 		printAllMoves();
 
 		auto outCome = calculateState();

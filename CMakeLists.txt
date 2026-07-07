@@ -14,3 +14,4 @@ add_executable(Chess
     "game.cpp"
     "minimax.cpp"
 )
+

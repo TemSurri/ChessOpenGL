@@ -5,6 +5,7 @@
 #include <variant>
 #include <unordered_map>
 #include <cstdint>
+#include <bit>
 #include <random>
 
 // to do organize code to only need to use one array, and is turn thats all
@@ -210,9 +211,382 @@ class ClassicChess {
 		void gameLoopVSminimaxAI(bool whiteIsAi, int depth);
 
 
+		//curent bitboard implementation
+
+
+
+		uint64_t occupancy;
+		uint64_t empty;
+		uint64_t w_occupancy;
+		uint64_t b_occupancy;
+
+		uint64_t w_bishops;
+		uint64_t w_pawns;
+		uint64_t w_king;
+		uint64_t w_rooks;
+		uint64_t w_knights;
+		uint64_t w_queen;
+
+		uint64_t b_bishops;
+		uint64_t b_pawns;
+		uint64_t b_king;
+		uint64_t b_rooks;
+		uint64_t b_knights;
+		uint64_t b_queen;
+
+		enum PieceTypeBit {
+			NO_PIECE,
+			W_PAWN, W_KNIGHT, W_BISHOP, W_ROOK, W_QUEEN, W_KING,
+			B_PAWN, B_KNIGHT, B_BISHOP, B_ROOK, B_QUEEN, B_KING
+		};
+
+		struct Move {
+			int from;
+			int to;
+
+			PieceTypeBit moved;
+			PieceTypeBit captured = NO_PIECE;
+		};
+
+		static constexpr int NORTH = 8;
+		static constexpr int SOUTH = -8;
+
+		static constexpr int EAST = 1;
+		static constexpr int WEST = -1;
+
+		static constexpr int NORTH_EAST = 9;
+		static constexpr int NORTH_WEST = 7;
+
+		static constexpr int SOUTH_EAST = -7;
+		static constexpr int SOUTH_WEST = -9;
+
+		uint64_t& get_piece_board(PieceTypeBit piece)
+		{
+			switch (piece)
+			{
+			case W_PAWN:   return w_pawns;
+			case W_KNIGHT: return w_knights;
+			case W_BISHOP: return w_bishops;
+			case W_ROOK:   return w_rooks;
+			case W_QUEEN:  return w_queen;
+			case W_KING:   return w_king;
+
+			case B_PAWN:   return b_pawns;
+			case B_KNIGHT: return b_knights;
+			case B_BISHOP: return b_bishops;
+			case B_ROOK:   return b_rooks;
+			case B_QUEEN:  return b_queen;
+			case B_KING:   return b_king;
+
+			default:
+				throw std::runtime_error("Invalid piece type");
+			}
+		}
+
+		void exec_move(Move move)
+		{
+			uint64_t fromMask = 1ULL << move.from;
+			uint64_t toMask = 1ULL << move.to;
+
+			// remove captured piece if there is one
+			if (move.captured != NO_PIECE)
+			{
+				get_piece_board(move.captured) &= ~toMask;
+			}
+
+			// move piece
+			uint64_t& board = get_piece_board(move.moved);
+
+			board &= ~fromMask; // remove from old square
+			board |= toMask;    // place on new square
+
+			updateOccupancy();
+		}
+
+		void undo_move(Move move)
+		{
+			uint64_t fromMask = 1ULL << move.from;
+			uint64_t toMask = 1ULL << move.to;
+
+			// move piece back
+			uint64_t& board = get_piece_board(move.moved);
+
+			board &= ~toMask;
+			board |= fromMask;
+
+			// restore captured piece
+			if (move.captured != NO_PIECE)
+			{
+				get_piece_board(move.captured) |= toMask;
+			}
+
+			updateOccupancy();
+		}
+
+		void updateOccupancy()
+		{
+			w_occupancy =
+				w_pawns |
+				w_knights |
+				w_bishops |
+				w_rooks |
+				w_queen |
+				w_king;
+
+			b_occupancy =
+				b_pawns |
+				b_knights |
+				b_bishops |
+				b_rooks |
+				b_queen |
+				b_king;
+
+			occupancy = w_occupancy | b_occupancy;
+			empty = ~occupancy;
+		}
+
+		void init_bitboard() {
+			// clear boards
+
+			w_pawns = 0;
+			w_knights = 0;
+			w_bishops = 0;
+			w_rooks = 0;
+			w_queen = 0;
+			w_king = 0;
+
+			b_pawns = 0;
+			b_knights = 0;
+			b_bishops = 0;
+			b_rooks = 0;
+			b_queen = 0;
+			b_king = 0;
+
+
+			// White pawns
+			for (int i = 0; i < 8; i++) {
+				w_pawns |= 1ULL << (8 + i);
+			}
+
+			// Black pawns
+			for (int i = 0; i < 8; i++) {
+				b_pawns |= 1ULL << (48 + i);
+			}
+
+			// White pieces
+			w_rooks |= (1ULL << 0) | (1ULL << 7);
+			w_knights |= (1ULL << 1) | (1ULL << 6);
+			w_bishops |= (1ULL << 2) | (1ULL << 5);
+			w_queen |= (1ULL << 3);
+			w_king |= (1ULL << 4);
+
+			// Black pieces
+			b_rooks |= (1ULL << 56) | (1ULL << 63);
+			b_knights |= (1ULL << 57) | (1ULL << 62);
+			b_bishops |= (1ULL << 58) | (1ULL << 61);
+			b_queen |= (1ULL << 59);
+			b_king |= (1ULL << 60);
+
+
+
+			updateOccupancy();
+
+		}
 		
-		//minimax 
+		void print_bitboard()
+		{
+			std::cout << "\n  A B C D E F G H\n";
+
+			for (int rank = 7; rank >= 0; rank--)
+			{
+				std::cout << rank + 1 << " ";
+
+				for (int file = 0; file < 8; file++)
+				{
+					int square = rank * 8 + file;
+					uint64_t mask = 1ULL << square;
+
+					char piece = '.';
+
+					// White
+					if (w_pawns & mask)      piece = 'P';
+					else if (w_knights & mask) piece = 'N';
+					else if (w_bishops & mask) piece = 'B';
+					else if (w_rooks & mask)   piece = 'R';
+					else if (w_queen & mask)   piece = 'Q';
+					else if (w_king & mask)    piece = 'K';
+
+					// Black
+					else if (b_pawns & mask)   piece = 'p';
+					else if (b_knights & mask) piece = 'n';
+					else if (b_bishops & mask) piece = 'b';
+					else if (b_rooks & mask)   piece = 'r';
+					else if (b_queen & mask)   piece = 'q';
+					else if (b_king & mask)    piece = 'k';
+
+					std::cout << piece << ' ';
+				}
+
+				std::cout << rank + 1 << '\n';
+			}
+
+			std::cout << "  A B C D E F G H\n";
+		}
+
+		char piece_to_char(PieceTypeBit piece)
+		{
+			switch (piece)
+			{
+			case W_PAWN:
+			case B_PAWN:   return 'P';
+
+			case W_KNIGHT:
+			case B_KNIGHT: return 'N';
+
+			case W_BISHOP:
+			case B_BISHOP: return 'B';
+
+			case W_ROOK:
+			case B_ROOK:   return 'R';
+
+			case W_QUEEN:
+			case B_QUEEN:  return 'Q';
+
+			case W_KING:
+			case B_KING:   return 'K';
+
+			default:
+				return '?';
+			}
+		}
+
+		std::string square_to_string(int square)
+		{
+			char file = 'a' + (square % 8);
+			char rank = '1' + (square / 8);
+
+			return std::string{ file, rank };
+		}
+
+		void print_moves(const std::vector<Move>& moves)
+		{
+			std::cout << "\nGenerated " << moves.size() << " moves:\n\n";
+
+			for (const Move& move : moves)
+			{
+				std::cout
+					<< piece_to_char(move.moved)
+					<< " "
+					<< square_to_string(move.from)
+					<< " -> "
+					<< square_to_string(move.to);
+
+				if (move.captured != NO_PIECE)
+				{
+					std::cout << "  captures "
+						<< piece_to_char(move.captured);
+				}
+
+				std::cout << '\n';
+			}
+		}
+
+		void test_in_main() {
+			init_bitboard();
+
+			print_bitboard();
+
+
+			auto moves = generate_pseudo_moves(true);
+			print_moves(moves);
+		}
+
+		PieceTypeBit piece_on_square(int square)
+		{
+			uint64_t mask = 1ULL << square;
+
+			if (w_pawns & mask) return W_PAWN;
+			if (w_knights & mask) return W_KNIGHT;
+			if (w_bishops & mask) return W_BISHOP;
+			if (w_rooks & mask) return W_ROOK;
+			if (w_queen & mask) return W_QUEEN;
+			if (w_king & mask) return W_KING;
+
+			if (b_pawns & mask) return B_PAWN;
+			if (b_knights & mask) return B_KNIGHT;
+			if (b_bishops & mask) return B_BISHOP;
+			if (b_rooks & mask) return B_ROOK;
+			if (b_queen & mask) return B_QUEEN;
+			if (b_king & mask) return B_KING;
+
+			return NO_PIECE;
+		}
+
+		void add_move(std::vector<Move>& moves, int from, int to, PieceTypeBit moved)
+		{
+			Move m;
+			m.from = from;
+			m.to = to;
+			m.moved = moved;
+			m.captured = piece_on_square(to);
+
+			moves.push_back(m);
+		}
 		
-	
+		bool is_own_piece(int square, bool white)
+		{
+			uint64_t mask = 1ULL << square;
+			return white ? (w_occupancy & mask) : (b_occupancy & mask);
+		}
+
+		bool is_enemy_piece(int square, bool white)
+		{
+			uint64_t mask = 1ULL << square;
+			return white ? (b_occupancy & mask) : (w_occupancy & mask);
+		}
+
+		bool is_empty_square(int square)
+		{
+			uint64_t mask = 1ULL << square;
+			return empty & mask;
+		}
+
+		std::vector<Move> generate_pseudo_moves(bool whiteToMove)
+		{
+			std::vector<Move> moves;
+
+			updateOccupancy();
+
+			if (whiteToMove)
+			{
+				generate_pawn_moves(moves, true);
+				//generate_knight_moves(moves, true);
+				//generate_bishop_moves(moves, true);
+				//generate_rook_moves(moves, true);
+				//generate_queen_moves(moves, true);
+				//generate_king_moves(moves, true);
+			}
+			else
+			{
+				generate_pawn_moves(moves, false);
+				//generate_knight_moves(moves, false);
+				//generate_bishop_moves(moves, false);
+				//generate_rook_moves(moves, false);
+				//generate_queen_moves(moves, false);
+				//generate_king_moves(moves, false);
+			}
+
+			return moves;
+		}
+
+		void generate_pawn_moves(std::vector<Move>& moves, bool is_white) {
+
+		};
+		//void generate_knight_moves(std::vector<Move>& moves, bool is_white);
+		//void generate_bishop_moves(std::vector<Move>& moves, bool is_white);
+		//void generate_rook_moves(std::vector<Move>& moves, bool is_white);
+		//void generate_queen_moves(std::vector<Move>& moves, bool is_white);
+		//void generate_king_moves(std::vector<Move>& moves, bool is_white);
+		
 		
 };

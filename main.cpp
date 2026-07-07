@@ -8,7 +8,7 @@
 int main() {
     ClassicChess g;
     
-    g.gameLoopVSminimaxAI(true, 8); 
+    g.test_in_main();
 
     return 0;
 }

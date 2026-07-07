@@ -8,3 +8,4 @@ CMakeCache.txt
 *.exe
 *.obj
 *.pdb
+CMakeSettings.json

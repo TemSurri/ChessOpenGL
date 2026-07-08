@@ -162,13 +162,7 @@ The next step is building an **OpenGL interface** for the engine. Besides making
 
 Could this engine be stronger? Absolutely.
 
-There are still plenty of ideas worth exploring—magic bitboards, incremental evaluation, stronger evaluation functions, endgame tablebases, multithreading, and many more search optimizations—but I'm satisfied with where the project is today.
+There are still plenty of ideas worth exploring, magic bitboards, incremental evaluation, stronger evaluation functions, endgame tablebases, multithreading, and many more search optimizations, but I'm satisfied with where the project is today.
 
-Modern engines like Stockfish search **hundreds of millions of nodes per second** while benefiting from decades of research and optimization.
-
-That was never the goal.
-
-The goal was to build a chess engine completely from scratch, understand every major optimization along the way, and continuously improve it until I was proud of it.
-
-I'd say that's mission accomplished.
+This aint so stockfish, but compared to my python chess engine i made in high-school, it might as well be.
 

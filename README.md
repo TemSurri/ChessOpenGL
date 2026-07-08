@@ -131,10 +131,10 @@ The engine currently supports:
 
 | Depth |                  Typical Time |
 | ----: | ----------------------------: |
-|     5 |                    ~0.2–0.4 s |
-|     6 |                        ~1–2 s |
-|     7 |                      ~0.5–4 s |
-|     8 | ~0.2–1 s (position dependent) |
+|     5 |                    ~0.1–0.4 s |
+|     6 |                    ~0.2-0.1 s |
+|     7 |                    ~0.2–1.3 s |
+|     8 | ~0.7–2 s (position dependent) |
 
 Current search throughput:
 
@@ -148,7 +148,7 @@ Current search throughput:
 
 I'll upload a short video here once the OpenGL interface is finished.
 
-The plan is to have one of my lower-rated friends play against the engine so it can finally bully a real human instead of just my CPU.
+The plan is to have one of my low/mid-rated friends play against the engine so it can finally bully a real human instead of just my CPU.
 
 *(Coming soon...)*
 

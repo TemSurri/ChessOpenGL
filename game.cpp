@@ -4,17 +4,6 @@
 #include <variant>
 
 //MOVE GENERATION HELPERS -------------------------------------------
-inline int ClassicChess::pop_lsb(uint64_t& bitboard)
-{
-	int square = std::countr_zero(bitboard); //finds where the lowest right most bit is
-	bitboard &= bitboard - 1; //pops it from the passed in board
-	return square;
-}
-
-inline bool ClassicChess::is_set(uint64_t bitboard, int square)
-{
-	return (bitboard >> square) & 1ULL;
-}
 
 ClassicChess::PieceTypeBit ClassicChess::piece_on_square(int square)
 {

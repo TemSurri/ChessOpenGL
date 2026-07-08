@@ -179,9 +179,17 @@ class ClassicChess {
 	
 		std::vector<Move> generate_pseudo_moves(bool whiteToMove);
 
-		inline int pop_lsb(uint64_t& bitboard);
-		
-		inline bool is_set(uint64_t bitboard, int square);
+		inline int pop_lsb(uint64_t& bitboard)
+			{
+				int square = std::countr_zero(bitboard); //finds where the lowest right most bit is
+				bitboard &= bitboard - 1; //pops it from the passed in board
+				return square;
+			}
+
+		inline bool is_set(uint64_t bitboard, int square)
+			{
+				return (bitboard >> square) & 1ULL;
+			}
 
 		//pawn logic
 		void add_pawn_move(std::vector<Move>& moves, int from, int to, PieceTypeBit pawnType);

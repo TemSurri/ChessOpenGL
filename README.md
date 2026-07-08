@@ -1,43 +1,174 @@
-# Chess
+# ♟️ C++ Chess Engine
 
-This project is a rewrite of my original chess engine.
+A chess engine written completely from scratch in C++.
 
-The old engine was extremely slow and could barely handle a Minimax opponent because almost every operation required unnecessary iteration and inefficient board lookups. The design worked for basic gameplay, but once AI search was introduced you would have to wait a solid 4-7 seconds before the AI could move.
+This project started as an attempt to rewrite my original Python chess engine, which worked... but only if you had the patience to wait **4–7 seconds** every time the AI wanted to think.
 
-## First Optimization
+Instead of continuously adding features to a slow foundation, I decided to throw everything away and rebuild it properly.
 
-The first version of the engine stored pieces in a python list and relied heavily on iteration to determine board state.
-So in this new c++ rewrite I introduced:
+Somewhere along the way, this turned into an obsession with making numbers go up.
 
-- whitePieces vector 
-- blackPieces vector
-- board[8][8] array storing pointers to pieces
+---
 
-Instead of iterating through every piece to determine whether a square is occupied, the engine can now directly index the board array in constant time.
+# Rewriting the Engine
 
-RESULT
-- O(1) move validation, rather than having to iterate over the entire list O(n).
-- minimax searches are significiantly faster, almost instant moves.
+The original Python engine represented the board as a list of piece objects. Every time it needed to answer a simple question—*"Is there a piece on this square?"*—it had to iterate through every piece until it found one.
 
-## Second Optimization (todo)
+That worked perfectly fine for playing chess.
 
-The current version is already much better and should be good enough for basic Minimax + Alpha-Beta pruning.
+It didn't work very well when Minimax started evaluating **hundreds of thousands of positions** every move.
 
-However, I eventually want to push the engine further and make the board representation more efficient. The next optimization step would be moving toward bitboards, which use integers to represent the board instead of larger object-based structures.
+For the rewrite, I wanted the board itself to answer those questions instantly.
 
-This is not required for the engine to work, but it would make the engine faster, cleaner for advanced search, and closer to how high-performance cutting edge chess engines are actually designed.
+The new engine stores:
 
-### Predicted Improvements
+* `board[8][8]` for constant-time square lookup
+* `whitePieces`
+* `blackPieces`
 
-- faster board operations
-- lower memory usage
-- faster AI search
-- deeper search depth
-- more scalable engine architecture
+Instead of repeatedly searching through every piece, the engine can directly index the board in **O(1)** time.
 
-## Tech
+This simple architectural change completely transformed the project. The AI that once needed **4–7 seconds** to make relatively shallow decisions suddenly became responsive enough that deeper searches were actually worth pursuing.
 
-- C++
-- CMake
-- STL
-- Planned: OpenGL (for the GUI later after im done with the optimizations)
+Once I saw those improvements, chasing performance became the fun part.
+
+---
+
+# Chasing Bigger Numbers
+
+With the engine architecture in a good place, I shifted my focus to the search algorithm.
+
+One optimization quickly turned into another.
+
+The engine gradually gained:
+
+* Alpha-Beta Pruning
+* Transposition Tables with Zobrist Hashing
+* Iterative Deepening
+* TT Move Ordering
+* Capture Move Ordering
+* Killer Move Heuristic
+
+I implemented each of these one at a time, benchmarking the engine after every addition.
+
+Before Alpha-Beta pruning, a **depth 5** search typically took **10–15 seconds**. **Depth 6** often took several minutes, and I honestly wasn't patient enough to find out how long depth 7 would take.
+
+After implementing the complete search stack, the results looked very different:
+
+* **Depth 5:** ~1–50 ms
+* **Depth 7:** ~3–5 seconds
+
+What's interesting is that none of these optimizations actually made the CPU process positions faster.
+
+Instead, they made the engine **search smarter**.
+
+Alpha-Beta pruning cuts away branches that can no longer influence the final result. Transposition Tables cache previously evaluated positions, avoiding repeated work. Iterative Deepening and move ordering help the engine discover strong candidate moves earlier, allowing even more branches to be pruned.
+
+The amount of work being done dropped dramatically, even though each individual position still cost roughly the same to evaluate.
+
+Then I accidentally discovered one of the biggest performance improvements of the entire project...
+
+Compiling in **Release** instead of **Debug**.
+
+Without changing a single search algorithm, performance jumped from roughly:
+
+**~100k nodes/sec**
+
+to nearly
+
+**800k nodes/sec**
+
+An almost **8× improvement**... thanks to checking the correct build configuration.
+
+Turns out the compiler had been doing a lot of the heavy lifting all along.
+
+---
+
+# Bitboards
+
+By this point, I was happy with the search algorithm itself.
+
+The next bottleneck wasn't *how* the engine searched—it was simply **how fast each position could be processed**.
+
+So I rewrote the board representation one final time using **bitboards**.
+
+Instead of storing the board with arrays and object pointers, a bitboard represents piece locations inside a single `uint64_t`. This allows many common chess operations to be performed using fast bitwise instructions instead of loops and pointer lookups.
+
+The search algorithm stayed exactly the same.
+
+The only goal was to make the existing engine process positions faster.
+
+That rewrite pushed performance to roughly:
+
+**2.4M–3.8M nodes/sec**
+
+Depending on the position, that's roughly a **20×–60× improvement** compared to where this project originally began.
+
+Sometimes the best optimization isn't inventing a new algorithm.
+
+It's making the old one ridiculously fast.
+
+---
+
+# Current Status
+
+The engine currently supports:
+
+* Full legal move generation
+* Make / Undo move system
+* Minimax
+* Alpha-Beta Pruning
+* Iterative Deepening
+* Zobrist Hashing
+* Transposition Tables
+* TT Move Ordering
+* Capture Move Ordering
+* Killer Move Heuristic
+* Bitboard board representation
+* Search profiling and benchmarking
+
+### Current Release Benchmarks
+
+| Depth |                  Typical Time |
+| ----: | ----------------------------: |
+|     5 |                    ~0.2–0.4 s |
+|     6 |                        ~1–2 s |
+|     7 |                      ~0.5–4 s |
+|     8 | ~0.2–1 s (position dependent) |
+
+Current search throughput:
+
+* **2.4M–3.8M nodes/second**
+* **20×–60× faster** than where the project originally began
+* **~38× faster** than my optimized array-based Release implementation
+
+---
+
+# Demo
+
+I'll upload a short video here once the OpenGL interface is finished.
+
+The plan is to have one of my lower-rated friends play against the engine so it can finally bully a real human instead of just my CPU.
+
+*(Coming soon...)*
+
+---
+
+# What's Next?
+
+For now, just a GUI.
+
+The next step is building an **OpenGL interface** for the engine. Besides making the project much nicer to interact with, it will also serve as practice before I begin writing my own game engine from scratch.
+
+Could this engine be stronger? Absolutely.
+
+There are still plenty of ideas worth exploring—magic bitboards, incremental evaluation, stronger evaluation functions, endgame tablebases, multithreading, and many more search optimizations—but I'm satisfied with where the project is today.
+
+Modern engines like Stockfish search **hundreds of millions of nodes per second** while benefiting from decades of research and optimization.
+
+That was never the goal.
+
+The goal was to build a chess engine completely from scratch, understand every major optimization along the way, and continuously improve it until I was proud of it.
+
+I'd say that's mission accomplished.
+

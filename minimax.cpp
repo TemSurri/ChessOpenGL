@@ -1,41 +1,75 @@
 #include "game.h"
-#include "gameInfo.h"
 #include <array>
 #include <algorithm>
 #include <chrono>
+#include <bit>
 
 //HEURISTICS -----------
-
 // value of pieces
-constexpr std::array<int, 7> pieceValues = {
-    0,
-    100,
-    320,
-    330,
-    500,
-    900,
-    20000
-};
+int ClassicChess::piece_value(PieceTypeBit piece) const
+{
+    switch (piece)
+    {
+    case W_PAWN:
+    case B_PAWN: return 100;
+    case W_KNIGHT:
+    case B_KNIGHT: return 320;
+    case W_BISHOP:
+    case B_BISHOP: return 330;
+    case W_ROOK:
+    case B_ROOK: return 500;
+    case W_QUEEN:
+    case B_QUEEN: return 900;
+    case W_KING:
+    case B_KING: return 20000;
+    default: return 0;
+    }
+}
 
 // simple heurisitc for board value
-int ClassicChess::evaluateBoard() {
-    int boardValue{};
+int ClassicChess::evaluateBoard()
+{
+    int value = 0;
 
-    for (auto& p : whitePieces) {
-        if (p.captured) {
-            continue;
-        }
-        boardValue = (whiteMaximizing) ? (boardValue + pieceValues[p.getType()]) : (boardValue - pieceValues[p.getType()]);
-    }
+    value += std::popcount(w_pawns) * piece_value(W_PAWN);
+    value += std::popcount(w_knights) * piece_value(W_KNIGHT);
+    value += std::popcount(w_bishops) * piece_value(W_BISHOP);
+    value += std::popcount(w_rooks) * piece_value(W_ROOK);
+    value += std::popcount(w_queen) * piece_value(W_QUEEN);
 
-    for (auto& p : blackPieces) {
-        if (p.captured) {
-            continue;
-        }
-        boardValue = (whiteMaximizing) ? (boardValue - pieceValues[p.getType()]) : (boardValue + pieceValues[p.getType()]);
-    }
+    value -= std::popcount(b_pawns) * piece_value(B_PAWN);
+    value -= std::popcount(b_knights) * piece_value(B_KNIGHT);
+    value -= std::popcount(b_bishops) * piece_value(B_BISHOP);
+    value -= std::popcount(b_rooks) * piece_value(B_ROOK);
+    value -= std::popcount(b_queen) * piece_value(B_QUEEN);
 
-    return boardValue;
+    // central pawn presence
+    uint64_t center = (1ULL << 27) | (1ULL << 28) | (1ULL << 35) | (1ULL << 36);
+    value += std::popcount(w_pawns & center) * 40;
+    value -= std::popcount(b_pawns & center) * 40;
+
+    // punish early rook-pawn pushes
+    if (!(w_pawns & (1ULL << 8)))  value -= 35; // a2 moved
+    if (!(w_pawns & (1ULL << 15))) value -= 35; // h2 moved
+
+    if (!(b_pawns & (1ULL << 48))) value += 35; // a7 moved
+    if (!(b_pawns & (1ULL << 55))) value += 35; // h7 moved
+
+    // reward d/e pawns leaving starting square
+    if (!(w_pawns & (1ULL << 11))) value += 25; // d2 moved
+    if (!(w_pawns & (1ULL << 12))) value += 25; // e2 moved
+
+    if (!(b_pawns & (1ULL << 51))) value -= 25; // d7 moved
+    if (!(b_pawns & (1ULL << 52))) value -= 25; // e7 moved
+
+    // discourage early queen movement
+    if (!(w_queen & (1ULL << 3)))
+        value -= 80; // white queen left d1
+
+    if (!(b_queen & (1ULL << 59)))
+        value += 80; // black queen left d8
+
+    return whiteMaximizing ? value : -value;
 }
 
 //SEARCH PROCESS -----------------
@@ -51,18 +85,18 @@ ClassicChess::EvaluatedMove ClassicChess::getBestMoveIterative(int maxDepth, boo
 
     for (int depth = 1; depth <= maxDepth; depth++) {
         uint64_t key = getHashCode(whiteToMove);
-        TTEntry& cached = transpositionalTable[key % TTsize];
+        TTEntry& cached = transpositionalTable[key & (TTsize - 1)];
 
         bool hasTT = cached.id == key;
-        MoveEndpoint ttMove{};
+        Move ttMove{};
 
         if (hasTT) {
             ttMove = cached.move;
         }
 
-        legalMoves = GenerateOrderedLegalMoves(whiteToMove, ttMove, hasTT, depth);
+        auto legalMoves = GenerateOrderedLegalMoves(whiteToMove, ttMove, hasTT, depth);
 
-        best = searchRoot(depth, whiteToMove);
+        best = searchRoot(depth, whiteToMove, legalMoves);
 
         TTEntry rootEntry{};
         rootEntry.depth = depth;
@@ -85,7 +119,7 @@ ClassicChess::EvaluatedMove ClassicChess::getBestMoveIterative(int maxDepth, boo
 }
 
 // initial root search that begins recrusive search
-ClassicChess::EvaluatedMove ClassicChess::searchRoot(int depth, bool whiteToMove) {
+ClassicChess::EvaluatedMove ClassicChess::searchRoot(int depth, bool whiteToMove, const std::array<ClassicChess::MoveSet, 4>& legalMoves) {
 
     int alpha = -100000;
     int beta = 100000;
@@ -97,7 +131,7 @@ ClassicChess::EvaluatedMove ClassicChess::searchRoot(int depth, bool whiteToMove
         best.value = -100000;
         for (auto& move : legalMoves) {
             for (auto& endpoint : move.moves) {
-                MoveRecord mrecord = final_move(endpoint);
+                MoveRecord mrecord = exec_move(endpoint);
                 int cur_val = minimax(depth - 1, !whiteToMove, alpha, beta);
                 undo_move(mrecord);
 
@@ -121,7 +155,7 @@ ClassicChess::EvaluatedMove ClassicChess::searchRoot(int depth, bool whiteToMove
         best.value = 100000;
         for (auto& move : legalMoves) {
             for (auto& endpoint : move.moves) {
-                MoveRecord mrecord = final_move(endpoint);
+                MoveRecord mrecord = exec_move(endpoint);
                 int cur_val = minimax(depth - 1, !whiteToMove, alpha, beta);
 
                 undo_move(mrecord);
@@ -157,7 +191,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
     //tt lookup
     uint64_t key = getHashCode(whiteToMove);
     TTEntry& cached = transpositionalTable[key & (TTsize - 1)];
-    MoveEndpoint orderTT{};
+    Move orderTT{};
     
 
     if (cached.id == key) {
@@ -182,8 +216,6 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
             }
         }
     }
-    
-
 
     //tt cache start 
     TTEntry entry{};
@@ -194,7 +226,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
     auto legal_moves_node = GenerateOrderedLegalMoves(whiteToMove, orderTT, cached.id == key, depth);
     int best;
     
-    MoveEndpoint bestMove{};
+    Move bestMove{};
 
     bool maximizing = (whiteToMove == whiteMaximizing);
 
@@ -210,7 +242,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
         }
 
         if (!hasMoves) {
-            if (is_checked(whiteToMove)) {
+            if (is_king_in_check(whiteToMove)) {
                 return -100000; //checkmated
             }
             return 0; // stalemate
@@ -221,7 +253,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
         for (auto& move : legal_moves_node) {
             for (auto& endpoint : move.moves) {
 
-                MoveRecord mrecord = final_move(endpoint);
+                MoveRecord mrecord = exec_move(endpoint);
 
                 int cur_val = minimax(depth - 1, !whiteToMove, alpha, beta);
 
@@ -256,9 +288,6 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
 
             }
         }
-
-        
-
     }
     else {
         
@@ -272,7 +301,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
         }
 
         if (!hasMoves) {
-            if (is_checked(whiteToMove)) {
+            if (is_king_in_check(whiteToMove)) {
                 return 100000; //checkmated
             }
             return 0; // stalemate
@@ -282,7 +311,7 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
        
         for (auto& move : legal_moves_node) {
             for (auto& endpoint : move.moves) {
-                MoveRecord mrecord = final_move(endpoint);
+                MoveRecord mrecord = exec_move(endpoint);
                 int cur_val = minimax(depth - 1, !whiteToMove, alpha, beta);
                 undo_move(mrecord);
 
@@ -327,34 +356,46 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
 }
 
 //TT TABLE ----------
+void ClassicChess::hash_piece_board(
+    uint64_t pieces,
+    int color,
+    int pieceIndex,
+    uint64_t& hash
+)
+{
+    while (pieces)
+    {
+        int square = pop_lsb(pieces);
+        hash ^= zobristID[square][color][pieceIndex];
+    }
+}
 
 // generate a unique hash from board state
-uint64_t ClassicChess::getHashCode(bool whitemove) {
+uint64_t ClassicChess::getHashCode(bool whiteToMove)
+{
     uint64_t hash = 0;
 
+    // white = color 1
+    hash_piece_board(w_pawns, 1, 0, hash);
+    hash_piece_board(w_knights, 1, 1, hash);
+    hash_piece_board(w_bishops, 1, 2, hash);
+    hash_piece_board(w_rooks, 1, 3, hash);
+    hash_piece_board(w_queen, 1, 4, hash);
+    hash_piece_board(w_king, 1, 5, hash);
 
-    for (int r{}; r < 8; r++) {
-        for (int c{}; c < 8; c++) {
+    // black = color 0
+    hash_piece_board(b_pawns, 0, 0, hash);
+    hash_piece_board(b_knights, 0, 1, hash);
+    hash_piece_board(b_bishops, 0, 2, hash);
+    hash_piece_board(b_rooks, 0, 3, hash);
+    hash_piece_board(b_queen, 0, 4, hash);
+    hash_piece_board(b_king, 0, 5, hash);
 
-            auto p = board[r][c];
-            if (!p) {
-                continue;
-            }
-
-            int square = r * 8 + c;
-            int color = (p->getColor()) ? 1 : 0;
-            int type = p->getType() - 1;
-
-            hash ^= zobristID[square][color][type];
-        }
-    }
-
-    if (whitemove) {
+    if (whiteToMove)
         hash ^= white_move_key;
-    }
 
     return hash;
-};
+}
 
 // add entry to TT table
 void ClassicChess::cacheEntryTT(TTEntry entry) {
@@ -370,11 +411,12 @@ void ClassicChess::cacheEntryTT(TTEntry entry) {
 };
 
 //MOVE ORDERING --------
-bool ClassicChess::isCaptureMove(const MoveEndpoint& move) const {
-    return move.fashion == EN_PASSENT || board[move.r][move.c] != nullptr;
+bool ClassicChess::isCaptureMove(const Move& move) const
+{
+    return move.captured != NO_PIECE || move.type == EN_PASSANT_MOVE;
 }
 
-void ClassicChess::storeKillerMove(const MoveEndpoint& move, int depth) {
+void ClassicChess::storeKillerMove(const Move& move, int depth) {
     if (depth < 0 || depth >= MAX_SEARCH_DEPTH) return;
     if (isCaptureMove(move)) return;
 
@@ -392,7 +434,7 @@ void ClassicChess::clearKillerMoves() {
 }
 
 // analyze which batch a move belongs in
-ClassicChess::MoveBunch ClassicChess::analyzeMove(MoveEndpoint& move, const MoveEndpoint& TTmove, bool isTT, int depth) {
+ClassicChess::MoveBunch ClassicChess::analyzeMove(Move& move, const Move& TTmove, bool isTT, int depth) {
 
 
     if (isTT && sameMove(move, TTmove)) {
@@ -400,13 +442,10 @@ ClassicChess::MoveBunch ClassicChess::analyzeMove(MoveEndpoint& move, const Move
     }
 
     if (isCaptureMove(move)) {
-        Piece* taken = board[move.r][move.c];
+        int capturedValue = piece_value(move.captured);
+        int attackerValue = piece_value(move.moved);
 
-        int value = taken
-            ? pieceValues[taken->getType()] * 5 - pieceValues[move.p->getType()]
-            : pieceValues[Pawn] * 5 - pieceValues[move.p->getType()];
-
-        move.value = value;
+        move.value = capturedValue * 5 - attackerValue;
         return CAPTURES;
     }
 
@@ -424,60 +463,36 @@ ClassicChess::MoveBunch ClassicChess::analyzeMove(MoveEndpoint& move, const Move
         }
     }
 
-    move.value = 0;
     return QUIET;
-
-   
-
-
 
 }
 
 // generate an array with movesets ordered by TT move, Captures, Killer Moves, Quiet Moves
-std::array<ClassicChess::MoveSet,4> ClassicChess::GenerateOrderedLegalMoves(bool is_white, const MoveEndpoint& TTmove, bool isTT, int depth) {
+std::array<ClassicChess::MoveSet, 4>
+ClassicChess::GenerateOrderedLegalMoves(bool is_white, const Move& TTmove, bool isTT, int depth)
+{
+    std::array<MoveSet, 4> orderedLegalMoves;
 
-    bool isChecked = is_checked(is_white);
-    auto pmoves = is_white ? (getPseudoMoves(whitePieces)) : (getPseudoMoves(blackPieces));
+    std::vector<Move> moves = generate_legal_moves(is_white);
 
-    std::array<ClassicChess::MoveSet, 4> orderedLegalMoves;
-
-
-
-    for (int i{}; i < pmoves.size(); i++) {
-
-        if (pmoves[i].moves.size() == 0) {
-      
-            continue;
-        }
-
-        if (isChecked || is_pinned((*pmoves[i].moves[0].p))) {
-            filterMoveSet(pmoves[i], isChecked, pmoves[i].moves[0].p);
-        }
-
-        if (pmoves[i].moves.size() > 0) {
-            // its a legal move
-            for (auto& move : pmoves[i].moves) {
-
-                MoveBunch category = analyzeMove(move, TTmove, isTT, depth);
-
-                orderedLegalMoves[category].moves.push_back(move);
-
-            }            
-        }        
-        
+    for (Move& move : moves)
+    {
+        MoveBunch category = analyzeMove(move, TTmove, isTT, depth);
+        orderedLegalMoves[category].moves.push_back(move);
     }
 
-    // order captures, rest dont need ordering since ihavent implemented them yet
-    auto CompareByValue = [](const MoveEndpoint& a, const MoveEndpoint& b) {
-        return a.value > b.value;
+    auto CompareByValue = [](const Move& a, const Move& b)
+        {
+            return a.value > b.value;
         };
 
-    std::sort(orderedLegalMoves[CAPTURES].moves.begin(), orderedLegalMoves[CAPTURES].moves.end(), CompareByValue);
-
+    std::sort(
+        orderedLegalMoves[CAPTURES].moves.begin(),
+        orderedLegalMoves[CAPTURES].moves.end(),
+        CompareByValue
+    );
 
     return orderedLegalMoves;
-
-
 }
 
 // LOGS & BENCHMARK TESTING ------------

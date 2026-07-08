@@ -3,863 +3,1213 @@
 #include <iostream>
 #include <variant>
 
-//DEBUG----------------------
-void ClassicChess::printAllMoves() {
-
-	std::cout << "Legal Moves" << std::endl;
-	std::cout << white_move << std::endl;
-	for (MoveSet moveSet : legalMoves) {
-
-		
-
-		for (auto end : moveSet.moves) {
-			std::array<int, 2> start = { end.p->getRow(), end.p->getCol() };
-
-			std::cout << "Piece(" << end.p->getType() << "):   " << '(' << start[0] << ", " << start[1] << ") -->" << '(' << end.r << ", " << end.c << ')' << end.fashion<< endl;
-
-		}
-	};
-
+//MOVE GENERATION HELPERS -------------------------------------------
+inline int ClassicChess::pop_lsb(uint64_t& bitboard)
+{
+	int square = std::countr_zero(bitboard); //finds where the lowest right most bit is
+	bitboard &= bitboard - 1; //pops it from the passed in board
+	return square;
 }
 
-void ClassicChess::printBoard() {
-	for (int r{}; r < BOARDROWS; r++) {
-				for (int c{}; c < BOARDCOLS; c++) {
+inline bool ClassicChess::is_set(uint64_t bitboard, int square)
+{
+	return (bitboard >> square) & 1ULL;
+}
 
-					if (board[r][c] == nullptr) {
-						cout << 0 << " ";
-					}
-					else {
-						cout << board[r][c]->getType() << " ";
-					}
-				};
-				cout << endl;
-			};
+ClassicChess::PieceTypeBit ClassicChess::piece_on_square(int square)
+{
+	uint64_t mask = 1ULL << square;
+
+	if (w_pawns & mask) return W_PAWN;
+	if (w_knights & mask) return W_KNIGHT;
+	if (w_bishops & mask) return W_BISHOP;
+	if (w_rooks & mask) return W_ROOK;
+	if (w_queen & mask) return W_QUEEN;
+	if (w_king & mask) return W_KING;
+
+	if (b_pawns & mask) return B_PAWN;
+	if (b_knights & mask) return B_KNIGHT;
+	if (b_bishops & mask) return B_BISHOP;
+	if (b_rooks & mask) return B_ROOK;
+	if (b_queen & mask) return B_QUEEN;
+	if (b_king & mask) return B_KING;
+
+	return NO_PIECE;
+}
+
+bool ClassicChess::is_own_piece(int square, bool white)
+{
+	uint64_t mask = 1ULL << square;
+	return white ? (w_occupancy & mask) : (b_occupancy & mask);
+}
+
+bool ClassicChess::is_enemy_piece(int square, bool white)
+{
+	uint64_t mask = 1ULL << square;
+	return white ? (b_occupancy & mask) : (w_occupancy & mask);
+}
+
+bool ClassicChess::is_empty_square(int square)
+{
+	uint64_t mask = 1ULL << square;
+	return empty & mask;
+}
+
+//sliding pieces logic
+inline bool ClassicChess::is_valid_slide(int from, int to, int dir)
+{
+	if (to < 0 || to >= 64)
+		return false;
+
+	int fromFile = from % 8;
+	int toFile = to % 8;
+
+	// moving east means file must increase by 1
+	if (dir == EAST || dir == NORTH_EAST || dir == SOUTH_EAST)
+		return toFile == fromFile + 1;
+
+	// moving west means file must decrease by 1
+	if (dir == WEST || dir == NORTH_WEST || dir == SOUTH_WEST)
+		return toFile == fromFile - 1;
+
+	// north/south file stays the same
+	return toFile == fromFile;
+}
+
+void ClassicChess::generate_sliding_moves( std::vector<Move>& moves, uint64_t pieces, bool is_white, PieceTypeBit pieceType, const int* dirs, int dirCount)
+{
+	uint64_t own = is_white ? w_occupancy : b_occupancy;
+	uint64_t enemy = is_white ? b_occupancy : w_occupancy;
+
+	while (pieces)
+	{
+		int from = pop_lsb(pieces);
+
+		for (int i = 0; i < dirCount; i++)
+		{
+			int dir = dirs[i];
+			int current = from;
+
+			while (true)
+			{
+				int to = current + dir;
+
+				if (!is_valid_slide(current, to, dir))
+					break;
+
+				uint64_t toMask = 1ULL << to;
+
+				if (own & toMask)
+					break;
+
+				add_move(moves, from, to, pieceType);
+
+				if (enemy & toMask)
+					break;
+
+				current = to;
+			}
+		}
+	}
+}
+
+void ClassicChess::add_move(std::vector<Move>& moves, int from, int to, PieceTypeBit moved)
+{
+	Move m;
+	m.from = from;
+	m.to = to;
+	m.moved = moved;
+	m.captured = piece_on_square(to);
+
+	moves.push_back(m);
+}
+
+void ClassicChess::add_pawn_move(std::vector<Move>& moves, int from, int to, PieceTypeBit pawnType)
+{
+	Move m;
+	m.from = from;
+	m.to = to;
+	m.moved = pawnType;
+	m.captured = piece_on_square(to);
+
+	if ((pawnType == W_PAWN && to >= 56) ||
+		(pawnType == B_PAWN && to <= 7))
+	{
+		m.type = PROMOTION_MOVE; // auto queen
+	}
+
+	moves.push_back(m);
+}
+
+void ClassicChess::init_knight_attacks()
+{
+	for (int square = 0; square < 64; square++)
+	{
+		uint64_t attacks = 0ULL;
+
+		int rank = square / 8;
+		int file = square % 8;
+
+		const int dr[8] = { 2, 2, 1, 1, -1, -1, -2, -2 };
+		const int df[8] = { 1, -1, 2, -2, 2, -2, 1, -1 };
+
+		for (int i = 0; i < 8; i++)
+		{
+			int r = rank + dr[i];
+			int f = file + df[i];
+
+			if (r >= 0 && r < 8 && f >= 0 && f < 8)
+			{
+				int target = r * 8 + f;
+				attacks |= 1ULL << target;
+			}
+		}
+
+		knight_attacks[square] = attacks;
+	}
+}
+
+void ClassicChess::init_king_attacks()
+{
+	for (int square = 0; square < 64; square++)
+	{
+		uint64_t attacks = 0ULL;
+
+		int rank = square / 8;
+		int file = square % 8;
+
+		const int dr[8] = { 1, 1, 1, 0, 0, -1, -1, -1 };
+		const int df[8] = { -1, 0, 1, -1, 1, -1, 0, 1 };
+
+		for (int i = 0; i < 8; i++)
+		{
+			int r = rank + dr[i];
+			int f = file + df[i];
+
+			if (r >= 0 && r < 8 && f >= 0 && f < 8)
+			{
+				attacks |= 1ULL << (r * 8 + f);
+			}
+		}
+
+		king_attacks[square] = attacks;
+	}
+}
+
+//PSUEDO LEGAL MOVE GENERATION ------------------------------------------------------------
+
+void ClassicChess::generate_pawn_moves(std::vector<Move>& moves, bool white)
+{
+	uint64_t pawns = white ? w_pawns : b_pawns;
+
+	const PieceTypeBit pawnType = white ? W_PAWN : B_PAWN;
+	const int forward = white ? NORTH : SOUTH;
+
+	const int startMin = white ? 8 : 48;
+	const int startMax = white ? 15 : 55;
+
+	const uint64_t enemy = white ? b_occupancy : w_occupancy;
+
+	while (pawns)
+	{
+		int from = pop_lsb(pawns);
+
+		int oneForward = from + forward;
+
+		// one-square push
+		if (oneForward >= 0 && oneForward < 64 && is_set(empty, oneForward))
+		{
+			add_pawn_move(moves, from, oneForward, pawnType);
+
+			// two-square push
+			int twoForward = from + 2 * forward;
+
+			if (from >= startMin && from <= startMax && is_set(empty, twoForward))
+			{
+				add_move(moves, from, twoForward, pawnType);
+			}
+		}
+
+		// normal captures
+		int capLeft = white ? from + NORTH_WEST : from + SOUTH_WEST;
+		int capRight = white ? from + NORTH_EAST : from + SOUTH_EAST;
+
+		if ((from % 8 != 0) && capLeft >= 0 && capLeft < 64 && is_set(enemy, capLeft))
+		{
+			add_pawn_move(moves, from, capLeft, pawnType);
+		}
+
+		if ((from % 8 != 7) && capRight >= 0 && capRight < 64 && is_set(enemy, capRight))
+		{
+			add_pawn_move(moves, from, capRight, pawnType);
+		}
+
+		// en passant
+		if (en_passant_square != -1)
+		{
+			if ((from % 8 != 0) && capLeft == en_passant_square)
+			{
+				Move m;
+				m.from = from;
+				m.to = capLeft;
+				m.moved = pawnType;
+				m.captured = white ? B_PAWN : W_PAWN;
+				m.type = EN_PASSANT_MOVE;
+
+				moves.push_back(m);
+			}
+
+			if ((from % 8 != 7) && capRight == en_passant_square)
+			{
+				Move m;
+				m.from = from;
+				m.to = capRight;
+				m.moved = pawnType;
+				m.captured = white ? B_PAWN : W_PAWN;
+				m.type = EN_PASSANT_MOVE;
+
+				moves.push_back(m);
+			}
+		}
+	}
+}
+
+void ClassicChess::generate_knight_moves(std::vector<Move>& moves, bool white)
+{
+	uint64_t knights = white ? w_knights : b_knights;
+	uint64_t own = white ? w_occupancy : b_occupancy;
+
+	PieceTypeBit knightType = white ? W_KNIGHT : B_KNIGHT;
+
+	while (knights)
+	{
+		int from = pop_lsb(knights);
+
+		uint64_t targets = knight_attacks[from] & ~own; //removes all the targets that overlap with your own occupancy
+
+		while (targets)
+		{
+			int to = pop_lsb(targets);
+			add_move(moves, from, to, knightType);
+		}
+	}
+}
+
+void ClassicChess::generate_king_moves(std::vector<Move>& moves, bool white)
+{
+	uint64_t king = white ? w_king : b_king;
+	uint64_t own = white ? w_occupancy : b_occupancy;
+
+	PieceTypeBit kingType = white ? W_KING : B_KING;
+
+	if (!king) return;
+
+	int from = pop_lsb(king);
+
+	uint64_t targets = king_attacks[from] & ~own;
+
+	while (targets)
+	{
+		int to = pop_lsb(targets);
+		add_move(moves, from, to, kingType);
+	}
+
+	add_castling_moves(moves, white);
+}
+
+void ClassicChess::add_castling_moves(std::vector<Move>& moves, bool is_white)
+{
+	updateOccupancy();
+
+	if (is_king_in_check(is_white))
 		return;
-}
-//SET UP-------------
 
-Piece* ClassicChess::storePiece(int r, int c, PieceType type) {
-
-	// assume row greater than 4 is white
-	// this is where we can store differnt objects based on type but for not itll be on Piece class later can do inhertiance
-
-	bool upper = r < BOARDROWS / 2;
-	bool is_white = (upper == white_upper);
-
-	Piece piece = Piece(r, c, is_white, type, board);
-
-	if (is_white) {
-		whitePieces.push_back(piece);
-		return &(whitePieces.back());
-	}
-	else {
-		blackPieces.push_back(piece);
-		return &(blackPieces.back());
-	}
-
-}
-
-void ClassicChess::initClassicGame() {
-
-	whitePieces.reserve(pieceNumber);
-	blackPieces.reserve(pieceNumber);
-
-	for (int r{}; r < BOARDROWS; r++) {
-
-		for (int c{}; c < BOARDCOLS; c++) {
-
-			if (r == 1 || r == 6) {
-				board[r][c] = storePiece(r, c, Pawn);
-			}
-			else if (r == 0 || r == 7) {
-				if (c == 0 || c == 7) {
-					board[r][c] = storePiece(r, c, Rook);
-				}
-				else if (c == 1 || c == 6) {
-					board[r][c] = storePiece(r, c, Knight);
-				}
-				else if (c == 2 || c == 5) {
-					board[r][c] = storePiece(r, c, Bishop);
-				}
-				else if (c == 3) {
-					board[r][c] = storePiece(r, c, Queen);
-				}
-				else if (c == 4) {
-					board[r][c] = storePiece(r, c, King);
-					if ((board[r][c])->getColor()) {
-						this->whiteKing = board[r][c];
-					}
-					else {
-						this->blackKing = board[r][c];
-					}
-				}
-			}
-		};
-	};
-
-}
-
-//BOARD/PIECE OPERATIONS ---------------------
-
-// updates the board with a move and returns a move record
-ClassicChess::MoveRecord ClassicChess::final_move(const MoveEndpoint& move ) {
-
-			const int ogR = move.p->getRow();
-			const int ogC = move.p->getCol();
-			const int newR = move.r;
-			const int newC = move.c;
-
-			MoveRecord record;
-			record.end = move;
-
-
-			if (move.fashion == EN_PASSENT) {
-				record.taken = board[ogR][newC];
-			}
-			else {
-				record.taken = board[newR][newC];
-			}
-
-			record.moved = move.p;
-			record.startRow = ogR;
-			record.startCol = ogC;
-
-			if (move.fashion == EN_PASSENT) {
-				if (record.taken) {
-					record.taken->captured = true;
-				}
-
-				board[ogR][newC] = nullptr; // remove captured pawn
-				board[ogR][ogC] = nullptr;  // clear old square
-
-				move.p->incrementMove();
-				move.p->move(newR, newC);
-				board[newR][newC] = move.p;
-
-				return record;
-			}
-
-			if (move.fashion == CASTLE) {
-				//do castle
-			
-				// add or subtract 2 fromt king col
-				// rooks new col = king col + or minus 2
-
-				// depends on if rook col > other col
-
-				//idneitfy the rook
-				Piece* rookToCastle = board[newR][newC];
-				board[newR][newC] = nullptr;
-
-				board[ogR][ogC] = nullptr;
-
-				if (newC > ogC) {
-					// rook is to the right of the king
-					board[ogR][ogC + 2] = move.p;
-					move.p->move(ogR, ogC + 2);
-					move.p->incrementMove();
-
-					board[ogR][ogC + 2 - 1] = rookToCastle;
-					rookToCastle->move(ogR, ogC + 2 - 1);
-					rookToCastle->incrementMove();
-
-				}
-				else {
-					// rook is to the left of the king
-					board[ogR][ogC - 2] = move.p;
-					move.p->move(ogR, ogC - 2);
-					move.p->incrementMove();
-
-					board[ogR][ogC - 2 + 1] = rookToCastle;
-					rookToCastle->move(ogR, ogC - 2 + 1);
-					rookToCastle->incrementMove();
-
-				}
-
-				return record;
-			}
-
-
-			if (board[newR][newC]) {
-				board[newR][newC]->captured = true;
-			}
-
-
-			board[ogR][ogC]->incrementMove();
-			board[ogR][ogC]->move(newR, newC);
-			board[newR][newC] = board[ogR][ogC];
-
-			board[ogR][ogC] = nullptr;
-
-			if (move.fashion == PAWN_PROMOTION) {
-				move.p->changeType(PieceType::Queen);
-			}
-
-			if (move.fashion == EN_PASSENT) {
-
-				board[ogR][newC] = nullptr;
-
-			};
-			
-			// auto empties old spot isnt accurate for castling
-
-			return record;
-			
-		};
-
-// updates the board by undoing a move from its record
-void ClassicChess::undo_move(MoveRecord record) {
-			
-			
-			const auto p = record.moved;
-			const int newR = record.end.r;
-			const int newC = record.end.c;
-			const int oldR = record.startRow;
-			const int oldC = record.startCol;
-			const MoveFashion fashion = record.end.fashion;
-
-			if (fashion == EN_PASSENT) {
-				board[newR][newC] = nullptr;
-
-				board[oldR][newC] = record.taken;
-				if (record.taken) {
-					record.taken->captured = false;
-				}
-
-
-				board[oldR][oldC] = p;
-				p->move(oldR, oldC);
-				p->deincrementMove();
-
-
-
-				return;
-			};
-
-			if (fashion == CASTLE && record.taken) {
-				//remove the caslte things
-				board[newR][newC] = record.taken;
-				board[oldR][oldC] = p;
-				p->move(oldR, oldC);
-				p->deincrementMove();
-
-				// in this case the taken is the rook that moved
-				record.taken->move(newR, newC);
-				record.taken->deincrementMove();
-
-				// clear the moved spots
-				if (newC > oldC) {
-					// rook is to the right of the king
-					board[oldR][oldC + 2] = nullptr;
-
-					board[oldR][oldC + 2 - 1] = nullptr;
-
-				}
-				else {
-					// rook is to the right of the king
-					board[oldR][oldC - 2] = nullptr;
-
-
-					board[oldR][oldC - 2 + 1] = nullptr;
-
-				}
-
-				return;
-			}
-
-			if (fashion == PAWN_PROMOTION) {
-
-				if (record.taken) {
-					record.taken->captured = false;
-				}
-
-				p->changeType(Pawn);
-				board[newR][newC] = record.taken;
-				board[oldR][oldC] = p;
-				p->move(oldR, oldC);
-				p->deincrementMove();
-
-				return;
-
-			}
-
-			// might laso just encompass undo castle logic
-			if (fashion == STANDARD) {
-
-				if (record.taken) {
-					record.taken->captured = false;
-				}
-
-				board[newR][newC] = record.taken;
-				board[oldR][oldC] = p;
-				p->move(oldR, oldC);
-				p->deincrementMove();
-
-				return;
-			}
-
+	if (is_white)
+	{
+		if (white_can_castle_kingside &&
+			(w_king & (1ULL << 4)) &&
+			(w_rooks & (1ULL << 7)) &&
+			!(occupancy & (1ULL << 5)) &&
+			!(occupancy & (1ULL << 6)) &&
+			!is_square_attacked(5, false) &&
+			!is_square_attacked(6, false))
+		{
+			Move m;
+			m.from = 4;
+			m.to = 6;
+			m.moved = W_KING;
+			m.type = CASTLING_MOVE;
+			moves.push_back(m);
 		}
 
-//MOVE GENERATION------------
-
-//directional vector
-static int directions[8][2] = {
-
-		{0, -1},
-		{0, 1},
-		{-1, 0},
-		{1, 0},
-		{-1,-1},
-		{-1, 1},
-		{1,-1}, 
-		{1, 1}
-
-	};
-
-//knight movement
-static int knightOffsets[8][2] {
-
-		{1, -2},
-		{1, 2},
-		{-1, -2},
-		{-1, 2},
-		{2, -1},
-		{2, 1},
-		{-2, -1},
-		{-2, 1}
-
-};
-
-//check if king sqaure is attacked
-bool ClassicChess::is_checked(bool is_white) {
-	
-	// horizontal right
-	Piece* king;
-
-	if (is_white) {
-		king = whiteKing;
-	} else {
-		king = blackKing;
+		if (white_can_castle_queenside &&
+			(w_king & (1ULL << 4)) &&
+			(w_rooks & (1ULL << 0)) &&
+			!(occupancy & (1ULL << 1)) &&
+			!(occupancy & (1ULL << 2)) &&
+			!(occupancy & (1ULL << 3)) &&
+			!is_square_attacked(3, false) &&
+			!is_square_attacked(2, false))
+		{
+			Move m;
+			m.from = 4;
+			m.to = 2;
+			m.moved = W_KING;
+			m.type = CASTLING_MOVE;
+			moves.push_back(m);
+		}
 	}
-
-	int r = king->getRow();
-	int c = king->getCol();
-	
-	if (is_attacked(r, c, is_white)) {
-		return true;
-	}
-
-	return false;
-}
-
-//check if a certain square is attacked
-bool ClassicChess::is_attacked(int r, int c, bool is_white) {
-	
-	PieceType enemy;
-
-	// check all directions for enemy rook + queen + rook || also check for pawn and king on first tierations
-	for (auto vector : directions) {
-		
-		if ((vector[0] == 0) || (vector[1] == 0)) {
-			//straight
-			enemy = Rook;
-		} else {
-			//diagonal
-			enemy = Bishop;
+	else
+	{
+		if (black_can_castle_kingside &&
+			(b_king & (1ULL << 60)) &&
+			(b_rooks & (1ULL << 63)) &&
+			!(occupancy & (1ULL << 61)) &&
+			!(occupancy & (1ULL << 62)) &&
+			!is_square_attacked(61, true) &&
+			!is_square_attacked(62, true))
+		{
+			Move m;
+			m.from = 60;
+			m.to = 62;
+			m.moved = B_KING;
+			m.type = CASTLING_MOVE;
+			moves.push_back(m);
 		}
 
-		//printBoard();
-		int j = 1;
+		if (black_can_castle_queenside &&
+			(b_king & (1ULL << 60)) &&
+			(b_rooks & (1ULL << 56)) &&
+			!(occupancy & (1ULL << 57)) &&
+			!(occupancy & (1ULL << 58)) &&
+			!(occupancy & (1ULL << 59)) &&
+			!is_square_attacked(59, true) &&
+			!is_square_attacked(58, true))
+		{
+			Move m;
+			m.from = 60;
+			m.to = 58;
+			m.moved = B_KING;
+			m.type = CASTLING_MOVE;
+			moves.push_back(m);
+		}
+	}
+}
 
-		while (true) {
-			// check if out of bounds
-			
-			int row = r + (vector[0]*j);
-			int col = c + (vector[1]*j);
+void ClassicChess::generate_bishop_moves(std::vector<Move>& moves, bool is_white)
+{
+	static constexpr int dirs[4] = {
+		NORTH_EAST,
+		NORTH_WEST,
+		SOUTH_EAST,
+		SOUTH_WEST
+	};
 
-			//std::cout<<j<<row<<col<<"\n";
-			
-			if (((col) < 0 || (row) < 0) || ((col) > 7|| (row) > 7) ) {
+	generate_sliding_moves(
+		moves,
+		is_white ? w_bishops : b_bishops,
+		is_white,
+		is_white ? W_BISHOP : B_BISHOP,
+		dirs,
+		4
+	);
+}
+
+void ClassicChess::generate_rook_moves(std::vector<Move>& moves, bool is_white)
+{
+	static constexpr int dirs[4] = {
+		NORTH,
+		SOUTH,
+		EAST,
+		WEST
+	};
+
+	generate_sliding_moves(
+		moves,
+		is_white ? w_rooks : b_rooks,
+		is_white,
+		is_white ? W_ROOK : B_ROOK,
+		dirs,
+		4
+	);
+}
+
+void ClassicChess::generate_queen_moves(std::vector<Move>& moves, bool is_white)
+{
+	static constexpr int dirs[8] = {
+		NORTH,
+		SOUTH,
+		EAST,
+		WEST,
+		NORTH_EAST,
+		NORTH_WEST,
+		SOUTH_EAST,
+		SOUTH_WEST
+	};
+
+	generate_sliding_moves(
+		moves,
+		is_white ? w_queen : b_queen,
+		is_white,
+		is_white ? W_QUEEN : B_QUEEN,
+		dirs,
+		8
+	);
+}
+
+std::vector<ClassicChess::Move> ClassicChess::generate_pseudo_moves(bool whiteToMove)
+{
+	std::vector<Move> moves;
+	moves.reserve(218); // reserve 218 thats the max # a baord state can have, this is just to avoid heap allocations
+
+	updateOccupancy();
+
+	if (whiteToMove)
+	{
+		generate_pawn_moves(moves, true);
+		generate_knight_moves(moves, true);
+		generate_bishop_moves(moves, true);
+		generate_rook_moves(moves, true);
+		generate_queen_moves(moves, true);
+		generate_king_moves(moves, true);
+	}
+	else
+	{
+		generate_pawn_moves(moves, false);
+		generate_knight_moves(moves, false);
+		generate_bishop_moves(moves, false);
+		generate_rook_moves(moves, false);
+		generate_queen_moves(moves, false);
+		generate_king_moves(moves, false);
+	}
+
+	return moves;
+}
+
+//LEGAL MOVE GENERATION -------------------------------------------------------
+bool ClassicChess::is_square_attacked_by_sliders(int square, bool byWhite)
+{
+	static constexpr int bishopDirs[4] = {
+		NORTH_EAST, NORTH_WEST, SOUTH_EAST, SOUTH_WEST
+	};
+
+	static constexpr int rookDirs[4] = {
+		NORTH, SOUTH, EAST, WEST
+	};
+
+	for (int dir : bishopDirs)
+	{
+		int current = square;
+
+		while (true)
+		{
+			int to = current + dir;
+
+			if (!is_valid_slide(current, to, dir))
+				break;
+
+			uint64_t toMask = 1ULL << to;
+
+			if (occupancy & toMask)
+			{
+				PieceTypeBit p = piece_on_square(to);
+
+				if (byWhite && (p == W_BISHOP || p == W_QUEEN))
+					return true;
+
+				if (!byWhite && (p == B_BISHOP || p == B_QUEEN))
+					return true;
+
 				break;
 			}
 
-			auto piece = board[row][col];
-				
-			if (piece) {
-				if (piece->getColor() == is_white) {
-					// check if piece is same colors
-					break;
-						
-				} else {
-					if (piece->getType() == enemy || piece->getType() == Queen)  {
-					
-						return true;
-					}
-					break;
-				}
-			};
-
-			j++;
+			current = to;
 		}
 	}
 
-	// check for knight 
-	for (auto offset : knightOffsets) {
-		int row = r + offset[0];
-		int col = c + offset[1];
+	for (int dir : rookDirs)
+	{
+		int current = square;
 
-		if (((col) < 0 || (row) < 0) || ((col) > 7 || (row) > 7)) {
-			continue;
-		}
+		while (true)
+		{
+			int to = current + dir;
 
-		auto piece = board[row][col];
+			if (!is_valid_slide(current, to, dir))
+				break;
 
-		if (piece) {
-			if ((piece->getColor() != is_white) && (piece->getType() == Knight)) {
-				// check if piece is same colors
-			
-				return true;
+			uint64_t toMask = 1ULL << to;
 
-			}
-		};
-	}
+			if (occupancy & toMask)
+			{
+				PieceTypeBit p = piece_on_square(to);
 
-	// check for king and pawn
-	//std::cout << "______"<< "\n";
-	for (auto vector : directions) {
-		
-		int row = r + vector[0];
-		int col = c + vector[1];
-
-		if (((col) < 0 || (row) < 0) || ((col) > 7 || (row) > 7)) {
-			continue;
-		}
-
-		
-		
-		auto piece = board[row][col];
-		//check for king
-		if (piece) {
-			if (piece->getColor() == is_white) {
-				// check if piece is same colors
-				continue;
-			}
-			else {
-				if (piece->getType() == King) {
-					
+				if (byWhite && (p == W_ROOK || p == W_QUEEN))
 					return true;
-				};
-				
-				if (piece->getType() == Pawn) {
-					
-					//piece->toString();
-					
-					if ((vector[0] != 0) && (vector[1] != 0)) {
-						
-						
-						if (is_white == white_upper) {
-							//upper
-							
-							if (vector[0] > 0) {
-								
-								return true;
-							}
 
-						}
-						else {
-							//lower
-							
-							if (vector[0] < 0) {
-								
-								return true;
-							}
+				if (!byWhite && (p == B_ROOK || p == B_QUEEN))
+					return true;
 
-						}
-
-					}
-
-
-
-				}
-
+				break;
 			}
-				
+
+			current = to;
+		}
+	}
+
+	return false;
+}
+
+bool ClassicChess::is_square_attacked(int square, bool byWhite)
+{
+	updateOccupancy();
+
+	uint64_t squareMask = 1ULL << square;
+
+	// pawn attacks
+	if (byWhite)
+	{
+		if (square % 8 != 0)
+		{
+			int pawnSquare = square + SOUTH_EAST; // square - 7
+			if (pawnSquare >= 0 && pawnSquare < 64 && (w_pawns & (1ULL << pawnSquare)))
+				return true;
 		}
 
+		if (square % 8 != 7)
+		{
+			int pawnSquare = square + SOUTH_WEST; // square - 9
+			if (pawnSquare >= 0 && pawnSquare < 64 && (w_pawns & (1ULL << pawnSquare)))
+				return true;
+		}
 	}
-	return false;
+	else
+	{
+		if (square % 8 != 0)
+		{
+			int pawnSquare = square + NORTH_EAST; // square + 9
+			if (pawnSquare >= 0 && pawnSquare < 64 && (b_pawns & (1ULL << pawnSquare)))
+				return true;
+		}
 
+		if (square % 8 != 7)
+		{
+			int pawnSquare = square + NORTH_WEST; // square + 7
+			if (pawnSquare >= 0 && pawnSquare < 64 && (b_pawns & (1ULL << pawnSquare)))
+				return true;
+		}
+	}
+
+	// knight attacks
+	uint64_t attackingKnights = byWhite ? w_knights : b_knights;
+
+	if (knight_attacks[square] & attackingKnights)
+		return true;
+
+	// king attacks
+	uint64_t attackingKing = byWhite ? w_king : b_king;
+
+	if (king_attacks[square] & attackingKing)
+		return true;
+
+	// bishop / rook / queen attacks
+	if (is_square_attacked_by_sliders(square, byWhite))
+		return true;
+
+	return false;
 }
 
-//check if its possible for a piece to be a pinned piece
-bool ClassicChess::is_pinned(Piece& p) {
+std::vector<ClassicChess::Move> ClassicChess::generate_legal_moves(bool whiteToMove)
+{
+	std::vector<Move> pseudoMoves = generate_pseudo_moves(whiteToMove);
 
-	Piece* king = p.getColor() ? whiteKing : blackKing;
+	std::vector<Move> legalMoves;
+	legalMoves.reserve(pseudoMoves.size());
 
-	int kingR = king->getRow();
-	int kingC = king->getCol();
+	bool currentlyInCheck = is_king_in_check(whiteToMove);
 
-
-	if (p.getRow() == kingR) {
-		return true;
-	}
-
-	if (p.getCol() == kingC) {
-		return true;
-	}
-
-	if (abs(p.getCol() - p.getRow()) == abs(kingC - kingR)) {
-		return true;
-	}
-
-	return false;
-
-
-}
-
-//generate all pseudo legal moves, returns a moveSet, of a piece and its moves
-std::vector<ClassicChess::MoveSet> ClassicChess::getPseudoMoves(std::vector<Piece>& pieces) {
-	
-	std::vector<MoveSet> pseudo_moves;
-
-	for (Piece& p : pieces) {
-
-		if (p.captured) {
+	for (const Move& move : pseudoMoves)
+	{
+		if (!currentlyInCheck && !can_be_pinned_to_king(move.from, whiteToMove))
+		{
+			legalMoves.push_back(move);
 			continue;
 		}
 
-		MoveSet move;
-		auto moves = p.pseudoLegalMoves();
+		auto record = exec_move(move);
 
-		for (auto end : moves) {
-
-			MoveEndpoint e;
-			e.r = end[0];
-			e.c = end[1];
-			e.p = &p;
-
-			// pawn promotion
-			if (p.getType() == Pawn && (e.r == 0 || e.r == 7)) {
-				e.fashion = PAWN_PROMOTION;
-			}
-			else {
-				e.fashion = STANDARD;
-			}
-
-			move.moves.emplace_back(e);
-
+		if (!is_king_in_check(whiteToMove))
+		{
+			legalMoves.push_back(move);
 		}
 
-		// castling
-		if (p.getType() == King && p.getTimesMoved() == 0) {
-
-			for (auto end : p.getCastledMoves()) {
-
-				MoveEndpoint e;
-				e.r = end[0];
-				e.c = end[1];
-				e.fashion = CASTLE;
-				e.p = &p;
-				move.moves.emplace_back(e);
-
-			}
-		}
-
-		if (p.getType() == Pawn && ((p.getTimesMoved() == 2 || p.getTimesMoved() == 3))) {
-			
-			for (auto end : p.getEnPassent()) {
-				MoveEndpoint e;
-				e.r = end[0];
-				e.c = end[1];
-				e.fashion = EN_PASSENT;
-				e.p = &p;
-				move.moves.emplace_back(e);
-			}
-
-		}
-
-		pseudo_moves.emplace_back(move);
-	}
-	return pseudo_moves;
-}
-
-//calls is_pinned + is_checked on a moveSet to see if it is LEGAL by simulating the move and then undoing it
-void ClassicChess::filterMoveSet(ClassicChess::MoveSet& move, bool kingInCheck, Piece* piece) {
-
-	std::array<int,2> start = { piece->getRow() , piece->getCol() };
-
-	for (int i{ static_cast<int>(move.moves.size()) }; --i >= 0;) {
-
-		auto end = move.moves[i];
-
-		//handle check legality
-		MoveRecord record = final_move(move.moves[i]);
-		bool check = is_checked(piece->getColor());
 		undo_move(record);
-
-		
-
-		//handle castle legality
-		bool illegal = false;
-		if (end.fashion == CASTLE) {
-			if (kingInCheck) {
-				illegal = true;
-			}
-			else {
-				if (end.c > start[1]) {
-					if (is_attacked(start[0], start[1] + 1, piece->getColor())) {
-						illegal = true;
-					}
-				}
-				else {
-					if (is_attacked(start[0], start[1] - 1, piece->getColor())) {
-						illegal = true;
-					}
-				}
-			}
-		}
-
-		if (check || illegal) {
-			
-			move.moves[i] = move.moves.back();
-			move.moves.pop_back();
-
-		}
-
 	}
 
-
+	return legalMoves;
 }
 
-//GAME SEQUENCE------------
+bool ClassicChess::can_be_pinned_to_king(int from, bool white)
+{
+	int kingSquare = get_king_square(white);
 
-//checks if there are legal moves available
-bool ClassicChess::hasLegalMoves() {
-	for (const auto& batch : legalMoves) {
-		if (!batch.moves.empty()) {
-			return true;
-		}
-	}
+	if (kingSquare == -1)
+		return true;
+
+	int fromRank = from / 8;
+	int fromFile = from % 8;
+
+	int kingRank = kingSquare / 8;
+	int kingFile = kingSquare % 8;
+
+	// same file
+	if (fromFile == kingFile)
+		return true;
+
+	// same rank
+	if (fromRank == kingRank)
+		return true;
+
+	// same diagonal
+	if (std::abs(fromRank - kingRank) == std::abs(fromFile - kingFile))
+		return true;
+
 	return false;
+};
+
+
+//STATE CHANGE -------------------------------------------------------
+ClassicChess::MoveRecord ClassicChess::exec_move(const Move& move)
+{
+	MoveRecord record;
+	record.move = move;
+
+	record.oldEnPassantSquare = en_passant_square;
+	record.oldWhiteCastleKingSide = white_can_castle_kingside;
+	record.oldWhiteCastleQueenSide = white_can_castle_queenside;
+	record.oldBlackCastleKingSide = black_can_castle_kingside;
+	record.oldBlackCastleQueenSide = black_can_castle_queenside;
+
+	uint64_t fromMask = 1ULL << move.from;
+	uint64_t toMask = 1ULL << move.to;
+
+	en_passant_square = -1;
+
+	if (move.type == EN_PASSANT_MOVE)
+	{
+		uint64_t& movingBoard = get_piece_board(move.moved);
+
+		movingBoard &= ~fromMask;
+		movingBoard |= toMask;
+
+		int capturedSquare = (move.moved == W_PAWN) ? move.to - 8 : move.to + 8;
+		get_piece_board(move.captured) &= ~(1ULL << capturedSquare);
+	}
+	else if (move.type == PROMOTION_MOVE)
+	{
+		get_piece_board(move.moved) &= ~fromMask;
+
+		if (move.captured != NO_PIECE)
+			get_piece_board(move.captured) &= ~toMask;
+
+		PieceTypeBit promoted = (move.moved == W_PAWN) ? W_QUEEN : B_QUEEN;
+		get_piece_board(promoted) |= toMask;
+	}
+	else if (move.type == CASTLING_MOVE)
+	{
+		uint64_t& kingBoard = get_piece_board(move.moved);
+
+		kingBoard &= ~fromMask;
+		kingBoard |= toMask;
+
+		if (move.to == 6) {
+			w_rooks &= ~(1ULL << 7);
+			w_rooks |= 1ULL << 5;
+		}
+		else if (move.to == 2) {
+			w_rooks &= ~(1ULL << 0);
+			w_rooks |= 1ULL << 3;
+		}
+		else if (move.to == 62) {
+			b_rooks &= ~(1ULL << 63);
+			b_rooks |= 1ULL << 61;
+		}
+		else if (move.to == 58) {
+			b_rooks &= ~(1ULL << 56);
+			b_rooks |= 1ULL << 59;
+		}
+	}
+	else
+	{
+		if (move.captured != NO_PIECE)
+			get_piece_board(move.captured) &= ~toMask;
+
+		uint64_t& movingBoard = get_piece_board(move.moved);
+
+		movingBoard &= ~fromMask;
+		movingBoard |= toMask;
+
+		if (move.moved == W_PAWN && move.to - move.from == 16)
+			en_passant_square = move.from + 8;
+
+		if (move.moved == B_PAWN && move.from - move.to == 16)
+			en_passant_square = move.from - 8;
+	}
+
+	// update castling rights
+	if (move.moved == W_KING) {
+		white_can_castle_kingside = false;
+		white_can_castle_queenside = false;
+	}
+	else if (move.moved == B_KING) {
+		black_can_castle_kingside = false;
+		black_can_castle_queenside = false;
+	}
+
+	if (move.moved == W_ROOK && move.from == 0) white_can_castle_queenside = false;
+	if (move.moved == W_ROOK && move.from == 7) white_can_castle_kingside = false;
+	if (move.moved == B_ROOK && move.from == 56) black_can_castle_queenside = false;
+	if (move.moved == B_ROOK && move.from == 63) black_can_castle_kingside = false;
+
+	if (move.captured == W_ROOK && move.to == 0) white_can_castle_queenside = false;
+	if (move.captured == W_ROOK && move.to == 7) white_can_castle_kingside = false;
+	if (move.captured == B_ROOK && move.to == 56) black_can_castle_queenside = false;
+	if (move.captured == B_ROOK && move.to == 63) black_can_castle_kingside = false;
+
+	updateOccupancy();
+	return record;
 }
 
-//calcaultes game state
-ClassicChess::OutCome ClassicChess::calculateState() {
-	if (hasLegalMoves()) {
-		return Normal;
+void ClassicChess::undo_move(const MoveRecord& record)
+{
+	const Move& move = record.move;
+
+	uint64_t fromMask = 1ULL << move.from;
+	uint64_t toMask = 1ULL << move.to;
+
+	if (move.type == EN_PASSANT_MOVE)
+	{
+		uint64_t& movingBoard = get_piece_board(move.moved);
+
+		movingBoard &= ~toMask;
+		movingBoard |= fromMask;
+
+		int capturedSquare = (move.moved == W_PAWN) ? move.to - 8 : move.to + 8;
+		get_piece_board(move.captured) |= 1ULL << capturedSquare;
+	}
+	else if (move.type == PROMOTION_MOVE)
+	{
+		PieceTypeBit promoted = (move.moved == W_PAWN) ? W_QUEEN : B_QUEEN;
+
+		get_piece_board(promoted) &= ~toMask;
+		get_piece_board(move.moved) |= fromMask;
+
+		if (move.captured != NO_PIECE)
+			get_piece_board(move.captured) |= toMask;
+	}
+	else if (move.type == CASTLING_MOVE)
+	{
+		uint64_t& kingBoard = get_piece_board(move.moved);
+
+		kingBoard &= ~toMask;
+		kingBoard |= fromMask;
+
+		if (move.to == 6) {
+			w_rooks &= ~(1ULL << 5);
+			w_rooks |= 1ULL << 7;
+		}
+		else if (move.to == 2) {
+			w_rooks &= ~(1ULL << 3);
+			w_rooks |= 1ULL << 0;
+		}
+		else if (move.to == 62) {
+			b_rooks &= ~(1ULL << 61);
+			b_rooks |= 1ULL << 63;
+		}
+		else if (move.to == 58) {
+			b_rooks &= ~(1ULL << 59);
+			b_rooks |= 1ULL << 56;
+		}
+	}
+	else
+	{
+		uint64_t& movingBoard = get_piece_board(move.moved);
+
+		movingBoard &= ~toMask;
+		movingBoard |= fromMask;
+
+		if (move.captured != NO_PIECE)
+			get_piece_board(move.captured) |= toMask;
 	}
 
-	if (white_move) {
-		return is_checked(true) ? BlackWin : Draw;
+	en_passant_square = record.oldEnPassantSquare;
+
+	white_can_castle_kingside = record.oldWhiteCastleKingSide;
+	white_can_castle_queenside = record.oldWhiteCastleQueenSide;
+	black_can_castle_kingside = record.oldBlackCastleKingSide;
+	black_can_castle_queenside = record.oldBlackCastleQueenSide;
+
+	updateOccupancy();
+}
+
+void ClassicChess::updateOccupancy()
+{
+	w_occupancy =
+		w_pawns |
+		w_knights |
+		w_bishops |
+		w_rooks |
+		w_queen |
+		w_king;
+
+	b_occupancy =
+		b_pawns |
+		b_knights |
+		b_bishops |
+		b_rooks |
+		b_queen |
+		b_king;
+
+	occupancy = w_occupancy | b_occupancy;
+	empty = ~occupancy;
+}
+
+void ClassicChess::init_bitboard() {
+	// clear boards
+
+
+	w_pawns = 0;
+	w_knights = 0;
+	w_bishops = 0;
+	w_rooks = 0;
+	w_queen = 0;
+	w_king = 0;
+
+	b_pawns = 0;
+	b_knights = 0;
+	b_bishops = 0;
+	b_rooks = 0;
+	b_queen = 0;
+	b_king = 0;
+
+
+	// White pawns
+	for (int i = 0; i < 8; i++) {
+		w_pawns |= 1ULL << (8 + i);
 	}
-	else {
-		return is_checked(false) ? WhiteWin : Draw;
+
+	// Black pawns
+	for (int i = 0; i < 8; i++) {
+		b_pawns |= 1ULL << (48 + i);
 	}
+
+	// White pieces
+	w_rooks |= (1ULL << 0) | (1ULL << 7);
+	w_knights |= (1ULL << 1) | (1ULL << 6);
+	w_bishops |= (1ULL << 2) | (1ULL << 5);
+	w_queen |= (1ULL << 3);
+	w_king |= (1ULL << 4);
+
+	// Black pieces
+	b_rooks |= (1ULL << 56) | (1ULL << 63);
+	b_knights |= (1ULL << 57) | (1ULL << 62);
+	b_bishops |= (1ULL << 58) | (1ULL << 61);
+	b_queen |= (1ULL << 59);
+	b_king |= (1ULL << 60);
+
+
+
+	updateOccupancy();
+
+}
+
+void ClassicChess::print_bitboard()
+{
+	std::cout << "\n  A B C D E F G H\n";
+
+	for (int rank = 7; rank >= 0; rank--)
+	{
+		std::cout << rank + 1 << " ";
+
+		for (int file = 0; file < 8; file++)
+		{
+			int square = rank * 8 + file;
+			uint64_t mask = 1ULL << square;
+
+			char piece = '.';
+
+			// White
+			if (w_pawns & mask)      piece = 'P';
+			else if (w_knights & mask) piece = 'N';
+			else if (w_bishops & mask) piece = 'B';
+			else if (w_rooks & mask)   piece = 'R';
+			else if (w_queen & mask)   piece = 'Q';
+			else if (w_king & mask)    piece = 'K';
+
+			// Black
+			else if (b_pawns & mask)   piece = 'p';
+			else if (b_knights & mask) piece = 'n';
+			else if (b_bishops & mask) piece = 'b';
+			else if (b_rooks & mask)   piece = 'r';
+			else if (b_queen & mask)   piece = 'q';
+			else if (b_king & mask)    piece = 'k';
+
+			std::cout << piece << ' ';
+		}
+
+		std::cout << rank + 1 << '\n';
+	}
+
+	std::cout << "  A B C D E F G H\n";
+}
+
+
+
+//GAME LOOP  ------------------------------------------------------------------------
+ClassicChess::OutCome ClassicChess::calculateState()
+{
+	auto moves = generate_legal_moves(white_move);
+
+	if (!moves.empty())
+		return Normal;
+
+	if (is_king_in_check(white_move))
+	{
+		return white_move ? BlackWin : WhiteWin;
+	}
+
+	return Draw;
+}
+
+char ClassicChess::piece_to_char(PieceTypeBit piece)
+{
+	switch (piece)
+	{
+	case W_PAWN:   return 'P';
+	case W_KNIGHT: return 'N';
+	case W_BISHOP: return 'B';
+	case W_ROOK:   return 'R';
+	case W_QUEEN:  return 'Q';
+	case W_KING:   return 'K';
+
+	case B_PAWN:   return 'p';
+	case B_KNIGHT: return 'n';
+	case B_BISHOP: return 'b';
+	case B_ROOK:   return 'r';
+	case B_QUEEN:  return 'q';
+	case B_KING:   return 'k';
+
+	default:
+		return '?';
+	}
+}
+
+std::string ClassicChess::square_to_string(int square)
+{
+	char file = 'a' + (square % 8);
+	char rank = '1' + (square / 8);
+
+	return std::string{ file, rank };
+}
+
+void ClassicChess::print_moves(const std::vector<Move>& moves)
+{
+	std::cout << "\nGenerated " << moves.size() << " moves:\n\n";
+
+	for (const Move& move : moves)
+	{
+		std::cout
+			<< piece_to_char(move.moved)
+			<< " "
+			<< square_to_string(move.from)
+			<< " -> "
+			<< square_to_string(move.to);
+
+		if (move.captured != NO_PIECE)
+		{
+			std::cout << "  captures "
+				<< piece_to_char(move.captured);
+		}
+
+		std::cout << '\n';
+	}
+}
+
+int inline ClassicChess::row_col_to_square(int row, int col)
+{
+	return row * 8 + col;
 }
 
 //validate user input to pick
-bool ClassicChess::verifyPick(int r, int c){
-	
-	if ((r>=8 || r < 0) || (c>=8 || c < 0)) {
+bool ClassicChess::verifyPick(int r, int c)
+{
+	if (r < 0 || r >= 8 || c < 0 || c >= 8)
 		return false;
-	}
-	
-	for (auto& moveSet : legalMoves) {
-		for (auto& move : moveSet.moves) {
 
-			if (move.p == board[r][c]) {
+	int square = row_col_to_square(r, c);
+	uint64_t mask = 1ULL << square;
 
-				return true;
-			}
-		}
-	}
-	
-	
-	return false;
-
+	if (white_move)
+		return w_occupancy & mask;
+	else
+		return b_occupancy & mask;
 }
 
 //validate user input to pick to move
-std::variant<bool, MoveEndpoint> ClassicChess::verifyMove(int r, int c, Piece* piece){
+std::variant<bool, ClassicChess::Move> ClassicChess::verifyMove(int from, int to)
+{
+	auto moves = generate_legal_moves(white_move);
 
-	if ((r>=8 || r < 0) || (c>=8 || c < 0)) {
-		return false;
+	for (const Move& move : moves)
+	{
+		if (move.from == from && move.to == to)
+		{
+			return move;
+		}
 	}
 
-	
-
-	for (auto &moveSet: this->legalMoves) {
-
-				
-		for (auto move : moveSet.moves) {
-
-				
-			if (((move.r == r) && (move.c == c)) && (piece == move.p)){
-				return move;
-			}
-		}
-	} 
-	
 	return false;
-
 }
 
 //player turn
-bool ClassicChess::move_turn() {
-
+bool ClassicChess::move_turn()
+{
 	int req_row;
 	int req_col;
 
-	std::cout<<"Pick Piece:"<<std::endl;
-	if (white_move) {
-		std::cout << "WHITE MOVE" << std::endl;
-	}
-	else {
-		std::cout << "BLACK" << std::endl;
-	}
+	std::cout << "Pick Piece:\n";
+	std::cout << (white_move ? "WHITE MOVE\n" : "BLACK MOVE\n");
 
-	std::cout<<"row : ";
-	std::cin>>req_row;
+	std::cout << "row: ";
+	std::cin >> req_row;
 
-	std::cout<<"col : ";
-	std::cin>>req_col;
+	std::cout << "col: ";
+	std::cin >> req_col;
 
-	bool pick = verifyPick(req_row, req_col);
-	while (!pick) {
+	while (!verifyPick(req_row, req_col))
+	{
+		std::cout << "Please pick a valid piece:\n";
 
-		std::cout<<"please Pick a valid Piece:"<<std::endl;
+		std::cout << "row: ";
+		std::cin >> req_row;
 
-		std::cout<<"row : ";
-		std::cin>>req_row;
-
-		std::cout<<"col : ";
-		std::cin>>req_col;
-
-		pick = verifyPick(req_row, req_col);
-		
+		std::cout << "col: ";
+		std::cin >> req_col;
 	}
 
-	Piece* piece = ClassicChess::board[req_row][req_col];
-	// pick works
+	int from = row_col_to_square(req_row, req_col);
 
 	int move_row;
 	int move_col;
 
-	std::cout<<"Move Piece:"<<std::endl;
+	std::cout << "Move Piece:\n";
 
-	piece->toString();
+	std::cout << "row: ";
+	std::cin >> move_row;
 
-	std::cout<<"row : ";
-	std::cin>>move_row;
+	std::cout << "col: ";
+	std::cin >> move_col;
 
-	std::cout<<"col : ";
-	std::cin>>move_col;
-
-	std::variant<bool, MoveEndpoint> move = verifyMove(move_row, move_col, piece);
-	while (std::holds_alternative<bool>(move)) {
-
-		std::cout<<"Please pick a valid move:"<<std::endl;
-
-		std::cout<<"row : ";
-		std::cin>>move_row;
-
-		std::cout<<"col : ";
-		std::cin>>move_col;
-		
-		move = verifyMove(move_row, move_col, piece);
+	if (move_row < 0 || move_row >= 8 || move_col < 0 || move_col >= 8)
+	{
+		std::cout << "Invalid square.\n";
+		return false;
 	}
 
+	int to = row_col_to_square(move_row, move_col);
 
-	//happens if eveyrhing is succesful
-	MoveEndpoint fmove = std::get<MoveEndpoint>(move);
-	this->final_move(fmove);
-	
+	std::variant<bool, Move> moveResult = verifyMove(from, to);
+
+	while (std::holds_alternative<bool>(moveResult))
+	{
+		std::cout << "Please pick a valid move:\n";
+
+		std::cout << "row: ";
+		std::cin >> move_row;
+
+		std::cout << "col: ";
+		std::cin >> move_col;
+
+		if (move_row < 0 || move_row >= 8 || move_col < 0 || move_col >= 8)
+			continue;
+
+		to = row_col_to_square(move_row, move_col);
+
+		moveResult = verifyMove(from, to);
+	}
+
+	Move chosenMove = std::get<Move>(moveResult);
+
+	exec_move(chosenMove);
+
 	return true;
-
-
-};
+}
 
 //regular pvp gameloop
-void ClassicChess::gameLoop() {
+void ClassicChess::gameLoop()
+{
 
-	initClassicGame();
+	init_bitboard();
 
-	while (this->game) {
+	game = true;
+	white_move = true;
 
-		std::cout << "VALUE OF BOARD:" << evaluateBoard() << std::endl;
-		printBoard();
+	while (game)
+	{
+		std::cout << "VALUE OF BOARD: " << evaluateBoard() << '\n';
 
+		print_bitboard();
 
+		auto outcome = calculateState();
 
+		std::cout << "outcome: " << outcome << '\n';
 
-
-		legalMoves = GenerateOrderedLegalMoves(white_move, MoveEndpoint{}, false, 0);
-		printAllMoves();
-
-		auto outCome = calculateState();
-		std::cout <<"outcome : "<< outCome << endl;
-		if (outCome != Normal) {
-			if (outCome == BlackWin) {
+		if (outcome != Normal)
+		{
+			if (outcome == BlackWin)
 				std::cout << "Black wins by checkmate\n";
-			}
-			else if (outCome == WhiteWin) {
+			else if (outcome == WhiteWin)
 				std::cout << "White wins by checkmate\n";
-			}
-			else if (outCome == Draw) {
+			else
 				std::cout << "Draw by stalemate\n";
-			}
+
 			game = false;
 			return;
 		}
 
-		//white always starts
 		bool turn = move_turn();
-		if (turn) {
 
-			iterator += 1;
-			if (white_move) {
-				white_move = false;
-			}
-			else {
-				white_move = true;
-			}
+		if (turn)
+		{
+			iterator++;
+			white_move = !white_move;
 		}
-
-		// calgulare the state
 	}
 }
 
 //ai vs player gameloop
 void ClassicChess::gameLoopVSminimaxAI(bool whiteIsAi, int depth) {
 
-	initClassicGame();
-	initZobrist();
-
+	init_bitboard();
 
 	while (this->game) {
 
 		std::cout << "VALUE OF BOARD:" << evaluateBoard() << std::endl;
-		printBoard();
+		print_bitboard();
 
 
 		uint64_t key = getHashCode(white_move);
-		TTEntry& cached = transpositionalTable[key % TTsize];
+		TTEntry& cached = transpositionalTable[key & (TTsize - 1)];
 
 		bool hasTT = (key == cached.id);
 
-		MoveEndpoint orderTT{};
+		Move orderTT{};
 		if (hasTT) {
 			orderTT = cached.move;
 		}
-
-
-
-		legalMoves = GenerateOrderedLegalMoves(white_move, orderTT, hasTT, depth);
-		printAllMoves();
-
+		
 		auto outCome = calculateState();
-		std::cout << "outcome : " << outCome << endl;
+		std::cout << "outcome : " << outCome << std::endl;
 		if (outCome != Normal) {
 			if (outCome == BlackWin) {
 				std::cout << "Black wins by checkmate\n";
@@ -880,8 +1230,7 @@ void ClassicChess::gameLoopVSminimaxAI(bool whiteIsAi, int depth) {
 		if (ai_move) {
 
 			auto bestMove = getBestMoveIterative(depth, white_move);
-			final_move(bestMove.move);
-
+			exec_move(bestMove.move);
 
 			//ai move
 
@@ -889,8 +1238,6 @@ void ClassicChess::gameLoopVSminimaxAI(bool whiteIsAi, int depth) {
 		else {
 
 			bool turn = move_turn();
-
-
 
 		}
 
@@ -902,8 +1249,6 @@ void ClassicChess::gameLoopVSminimaxAI(bool whiteIsAi, int depth) {
 			white_move = true;
 		}
 
-
-		// calgulare the state
 	}
 }
 

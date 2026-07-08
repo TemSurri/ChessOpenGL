@@ -5,7 +5,6 @@
 #include <bit>
 
 //HEURISTICS -----------
-
 // value of pieces
 int ClassicChess::piece_value(PieceTypeBit piece) const
 {
@@ -44,6 +43,32 @@ int ClassicChess::evaluateBoard()
     value -= std::popcount(b_rooks) * piece_value(B_ROOK);
     value -= std::popcount(b_queen) * piece_value(B_QUEEN);
 
+    // central pawn presence
+    uint64_t center = (1ULL << 27) | (1ULL << 28) | (1ULL << 35) | (1ULL << 36);
+    value += std::popcount(w_pawns & center) * 40;
+    value -= std::popcount(b_pawns & center) * 40;
+
+    // punish early rook-pawn pushes
+    if (!(w_pawns & (1ULL << 8)))  value -= 35; // a2 moved
+    if (!(w_pawns & (1ULL << 15))) value -= 35; // h2 moved
+
+    if (!(b_pawns & (1ULL << 48))) value += 35; // a7 moved
+    if (!(b_pawns & (1ULL << 55))) value += 35; // h7 moved
+
+    // reward d/e pawns leaving starting square
+    if (!(w_pawns & (1ULL << 11))) value += 25; // d2 moved
+    if (!(w_pawns & (1ULL << 12))) value += 25; // e2 moved
+
+    if (!(b_pawns & (1ULL << 51))) value -= 25; // d7 moved
+    if (!(b_pawns & (1ULL << 52))) value -= 25; // e7 moved
+
+    // discourage early queen movement
+    if (!(w_queen & (1ULL << 3)))
+        value -= 80; // white queen left d1
+
+    if (!(b_queen & (1ULL << 59)))
+        value += 80; // black queen left d8
+
     return whiteMaximizing ? value : -value;
 }
 
@@ -60,7 +85,7 @@ ClassicChess::EvaluatedMove ClassicChess::getBestMoveIterative(int maxDepth, boo
 
     for (int depth = 1; depth <= maxDepth; depth++) {
         uint64_t key = getHashCode(whiteToMove);
-        TTEntry& cached = transpositionalTable[key % TTsize];
+        TTEntry& cached = transpositionalTable[key & (TTsize - 1)];
 
         bool hasTT = cached.id == key;
         Move ttMove{};
@@ -191,8 +216,6 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
             }
         }
     }
-    
-
 
     //tt cache start 
     TTEntry entry{};
@@ -265,9 +288,6 @@ int ClassicChess::minimax(int depth, bool whiteToMove, int alpha, int beta) {
 
             }
         }
-
-        
-
     }
     else {
         
@@ -443,12 +463,7 @@ ClassicChess::MoveBunch ClassicChess::analyzeMove(Move& move, const Move& TTmove
         }
     }
 
-    move.value = 0;
     return QUIET;
-
-   
-
-
 
 }
 

@@ -2,13 +2,13 @@
 //
 
 #include "game.h"
-
+#include "gui.h"
 
 
 int main() {
-    ClassicChess g;
     
-    g.gameLoopVSminimaxAI(true, 7);
+    gui();
+
 
     return 0;
 }

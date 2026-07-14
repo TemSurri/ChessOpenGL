@@ -12,7 +12,7 @@ The engine supports full legal move generation, Minimax with Alpha-Beta pruning,
 
 Current performance:
 
-* **5M+ nodes/second**
+* **4M+ nodes/second**
 * **~1 ms** for positions that took my original Python engine **3-7 seconds**
 * **20-60× faster** than where this project originally began
 
@@ -66,14 +66,12 @@ This project started as a rewrite of my high-school Python chess engine. Instead
 
 The project evolved through several major rewrites—from an object-based board, to arrays, and finally to bitboards. Along the way I implemented Alpha-Beta pruning, Iterative Deepening, Transposition Tables, Zobrist Hashing, move ordering, and several search heuristics, benchmarking each optimization as I went.
 
-One of the biggest lessons was that performance isn't just about writing faster code—it's about avoiding unnecessary work. Most of the speedup came from making the engine search smarter, not simply making the CPU evaluate positions faster.
+One of the biggest lessons was that performance isn't only about writing faster code, it's about avoiding unnecessary work. Most of the speedup came from making the engine search smarter, not simply making the CPU evaluate positions faster. For instance all the algorithmic improvements, like pruning + caching by TT / Killer move table made it so you can skip entire branches of computation. Things like changing the data representation only made the CPU process positions faster, not more efficienty in the sense of doing less work.
 
 ---
 
 ## Challenges
 
-The biggest challenge wasn't writing Minimax—it was getting all of the chess rules correct while keeping the engine fast.
+The biggest challenge was organization, I will plan a lot more in the future.
 
-Special moves like castling, en passant, promotion, and legal move filtering all had edge cases that interacted with the search and undo system. Rewriting the board representation multiple times also meant rebuilding large parts of the engine while preserving correctness.
 
-By far the most valuable part of the project was learning how seemingly small architectural decisions compound into massive performance differences when an engine evaluates millions of positions.

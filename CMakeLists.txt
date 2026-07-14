@@ -14,7 +14,7 @@ add_subdirectory(external/glfw/glfw-3.4)
 
 add_library(glad
     external/glad/src/glad.c
- "gui/gui.h" "gui/shader.cpp" "gui/shader.h" "gui/ebo.h" "gui/ebo.cpp" "gui/vbo.cpp" "gui/vbo.h" "gui/vao.h" "gui/vao.cpp" "external/stb/stb_image.cpp")
+ "gui/gui.h" "gui/shader.cpp" "gui/shader.h" "gui/ebo.h"   "gui/vbo.h" "gui/vao.h"  "external/stb/stb_image.cpp")
 
 target_include_directories(glad PUBLIC
     external/glad/include
@@ -26,7 +26,7 @@ add_executable(Chess
     minimax.cpp
     "gui/gui.cpp"
  "gui/gui.h"
-     "gui/shader.cpp" "gui/shader.h" "gui/ebo.h" "gui/ebo.cpp" "gui/vbo.cpp" "gui/vbo.h" "gui/vao.h" "gui/vao.cpp" "external/stb/stb_image.cpp")
+     "gui/shader.cpp" "gui/shader.h" "gui/ebo.h"   "gui/vbo.h" "gui/vao.h"  "external/stb/stb_image.cpp")
 
 target_link_libraries(Chess PRIVATE
     glad

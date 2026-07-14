@@ -49,10 +49,3 @@ Shader::Shader(const char* vertexFile, const char* fragmentFile) {
     glDeleteShader(fragmentShader);
 }
 
-void Shader::Activate() {
-    glUseProgram(ID);
-}
-
-void Shader::Delete() {
-    glDeleteProgram(ID);
-}

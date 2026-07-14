@@ -6,11 +6,8 @@
 
 int main() {
 
-
-
     GuiManager manager = GuiManager();
     manager.guiMainLoop();
-
 
     return 0;
 }

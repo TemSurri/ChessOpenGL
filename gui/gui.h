@@ -21,6 +21,20 @@ class GuiManager {
 	public:
 		
 		// vertex pipeline
+
+		struct AtlasCell
+		{
+			int column;
+			int row;
+		};
+
+		struct UVRegion
+		{
+			float uMin, vMin;
+			float uMax, vMax;
+		};
+
+
 		struct textured_vertex {
 
 			GLfloat x;
@@ -65,7 +79,18 @@ class GuiManager {
 		std::vector<colored_vertex> getVerticesForBoard();
 		std::vector<GLuint> getBoardIndices();
 		
-		std::vector<pieceText> getVerticesForPieces(ClassicChess& game);
+		std::vector<textured_vertex>
+			getVerticesForPieces(ClassicChess& game);
+
+		std::vector<GLuint>
+			getPieceIndices(std::size_t pieceCount);
+
+		AtlasCell getAtlasCell(
+			ClassicChess::PieceTypeBit piece);
+
+		UVRegion getUVRegion(
+			int column,
+			int row);
 
 
 		int VIEWPORT_W = 800;

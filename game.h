@@ -365,9 +365,13 @@ class ClassicChess {
 		PieceTypeBit piece_on_square(int square) const;
 
 		ClassicChess() :transpositionalTable(TTsize) {
+			init_bitboard(); // duplicated in most loops
+			updateOccupancy();// duplicated in most loops
+
 			init_knight_attacks();
 			init_king_attacks();
 			initZobrist();
+			
 		};
 
 		//GAMELOOPS/GAMEMODES

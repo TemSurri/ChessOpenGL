@@ -4,24 +4,25 @@
 #include "vao.h"
 #include "vbo.h"
 #include "ebo.h"
+#include "../external/stb/stb_image.h"
+
 
 //convert data into a square
 GuiManager::Square GuiManager::makeSquare(
     float x,
     float y,
     float size,
-    const Color& color)
+    const UVRegion& uv)
 {
     Square square{};
 
-    square.color = color;
-
     square.vertices = { {
-        {x,        y,        0.0f}, // bottom-left
-        {x + size, y,        0.0f}, // bottom-right
-        {x + size, y + size, 0.0f}, // top-right
-        {x,        y + size, 0.0f}  // top-left
-    } };
+            // Position                    // Atlas coordinate
+            {x,        y,        0.0f,     uv.uMin, uv.vMin}, // bottom-left
+            {x + size, y,        0.0f,     uv.uMax, uv.vMin}, // bottom-right
+            {x + size, y + size, 0.0f,     uv.uMax, uv.vMax}, // top-right
+            {x,        y + size, 0.0f,     uv.uMin, uv.vMax}  // top-left
+        } };
 
     return square;
 }
@@ -134,17 +135,14 @@ int GuiManager::mouseToSquare(GLFWwindow* window)
     return row * 8 + column;
 }
 
-std::vector<GuiManager::RenderVertex> GuiManager::getChessGameBoardVertices(ClassicChess& game) {
-    
-
+std::vector<GuiManager::RenderVertex>
+GuiManager::getChessGameBoardVertices(ClassicChess& game)
+{
     std::vector<RenderVertex> boardVertices;
     boardVertices.reserve(64 * 4);
 
     constexpr float boardStart = -0.8f;
     constexpr float squareSize = 0.2f;
-
-    const Color light{ 0.85f, 0.85f, 0.85f };
-    const Color dark{ 0.25f, 0.25f, 0.25f };
 
     for (int row = 0; row < 8; row++)
     {
@@ -152,18 +150,29 @@ std::vector<GuiManager::RenderVertex> GuiManager::getChessGameBoardVertices(Clas
         {
             int squareNumber = row * 8 + col;
 
-            Color squareColor =
-                ((row + col) % 2 == 0) ? light : dark;
+            bool darkSquare =
+                ((row + col) % 2 != 0);
 
-            float x = boardStart + col * squareSize;
-            float y = boardStart + row * squareSize;
+            ClassicChess::PieceTypeBit piece =
+                game.piece_on_square(squareNumber);
 
-            Square square = makeSquare(
-                x,
-                y,
-                squareSize,
-                squareColor
-            );
+            AtlasCell atlasCell =
+                getAtlasCell(piece, darkSquare);
+
+            UVRegion uv =
+                getUVRegion(
+                    atlasCell.column,
+                    atlasCell.row
+                );
+
+            float x =
+                boardStart + col * squareSize;
+
+            float y =
+                boardStart + row * squareSize;
+
+            Square square =
+                makeSquare(x, y, squareSize, uv);
 
             for (const Vertex& vertex : square.vertices)
             {
@@ -171,22 +180,96 @@ std::vector<GuiManager::RenderVertex> GuiManager::getChessGameBoardVertices(Clas
                     vertex.x,
                     vertex.y,
                     vertex.z,
-                    square.color.r,
-                    square.color.g,
-                    square.color.b
+                    vertex.u,
+                    vertex.v
                     });
             }
-
-            ClassicChess::PieceTypeBit type =
-                game.piece_on_square(squareNumber);
-
-            // Use type later when generating piece texture data.
         }
     }
 
     return boardVertices;
+}
 
+GLuint loadChessAtlas(const char* path)
+{
+    int width = 0;
+    int height = 0;
+    int channels = 0;
 
+    stbi_set_flip_vertically_on_load(false);
+
+    unsigned char* data = stbi_load(
+        path,
+        &width,
+        &height,
+        &channels,
+        STBI_rgb_alpha
+    );
+
+    if (!data)
+    {
+        std::cerr
+            << "Failed to load atlas: "
+            << path << '\n'
+            << stbi_failure_reason() << '\n';
+
+        return 0;
+    }
+
+    std::cout
+        << "Loaded atlas: "
+        << width << " x " << height << '\n';
+
+    GLuint textureID = 0;
+    glGenTextures(1, &textureID);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_WRAP_S,
+        GL_CLAMP_TO_EDGE
+    );
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_WRAP_T,
+        GL_CLAMP_TO_EDGE
+    );
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_MIN_FILTER,
+        GL_LINEAR
+    );
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_MAG_FILTER,
+        GL_LINEAR
+    );
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA8,
+        width,
+        height,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        data
+    );
+
+    // Do not generate mipmaps yet.
+    stbi_image_free(data);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return textureID;
 }
 
 std::vector<GLuint> GuiManager::getChessGameBoardIndices()
@@ -206,6 +289,114 @@ std::vector<GLuint> GuiManager::getChessGameBoardIndices()
 
     return indices;
 }
+
+GuiManager::AtlasCell GuiManager::getAtlasCell(
+    ClassicChess::PieceTypeBit piece,
+    bool darkSquare)
+{
+    // Empty squares are in the final atlas row.
+    if (piece == ClassicChess::NO_PIECE)
+    {
+        return {
+            darkSquare ? 1 : 0,
+            4
+        };
+    }
+
+    bool whitePiece =
+        piece >= ClassicChess::W_PAWN &&
+        piece <= ClassicChess::W_KING;
+
+    int row;
+
+    if (whitePiece)
+        row = darkSquare ? 1 : 0;
+    else
+        row = darkSquare ? 3 : 2;
+
+    int column;
+
+    switch (piece)
+    {
+    case ClassicChess::W_KING:
+    case ClassicChess::B_KING:
+        column = 0;
+        break;
+
+    case ClassicChess::W_QUEEN:
+    case ClassicChess::B_QUEEN:
+        column = 1;
+        break;
+
+    case ClassicChess::W_ROOK:
+    case ClassicChess::B_ROOK:
+        column = 2;
+        break;
+
+    case ClassicChess::W_BISHOP:
+    case ClassicChess::B_BISHOP:
+        column = 3;
+        break;
+
+    case ClassicChess::W_KNIGHT:
+    case ClassicChess::B_KNIGHT:
+        column = 4;
+        break;
+
+    case ClassicChess::W_PAWN:
+    case ClassicChess::B_PAWN:
+        column = 5;
+        break;
+
+    default:
+        return { -1, -1 };
+    }
+
+    return { column, row };
+};
+
+
+GuiManager::UVRegion GuiManager::getUVRegion(
+    int column,
+    int row)
+{
+    constexpr float atlasWidth = 1374.0f;
+    constexpr float atlasHeight = 1145.0f;
+
+    constexpr float cellPixels = 229.0f;
+    constexpr float paddingPixels = 2.0f;
+
+    float left =
+        column * cellPixels + paddingPixels;
+
+    float right =
+        (column + 1) * cellPixels - paddingPixels;
+
+    // Image rows are numbered from the top.
+    float top =
+        row * cellPixels + paddingPixels;
+
+    float bottom =
+        (row + 1) * cellPixels - paddingPixels;
+
+    float uMin = left / atlasWidth;
+    float uMax = right / atlasWidth;
+
+    // Convert image Y coordinates into OpenGL UV coordinates.
+    float vMax = 1.0f - top / atlasHeight;
+    float vMin = 1.0f - bottom / atlasHeight;
+
+    return {
+        uMin,
+        vMin,
+        uMax,
+        vMax
+    };
+}
+
+
+
+
 
 int GuiManager::guiMainLoop()
 {
@@ -227,25 +418,17 @@ int GuiManager::guiMainLoop()
 
     // use glad to load openGl functions
     gladLoadGL();
-    glfwSetFramebufferSizeCallback(
-        window,
-        &GuiManager::framebufferSizeCallback
+
+    
+    GLuint atlasTexture = loadChessAtlas(
+        "resources/textures/chess_atlas.png"
     );
 
-    int framebufferWidth;
-    int framebufferHeight;
-
-    glfwGetFramebufferSize(
-        window,
-        &framebufferWidth,
-        &framebufferHeight
-    );
-
-    framebufferSizeCallback(
-        window,
-        framebufferWidth,
-        framebufferHeight
-    );
+    if (atlasTexture == 0)
+    {
+        guiWindowCleanUp(window);
+        return -1;
+    }
 
     glClearColor(0.42f, 0.13f, 0.11f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -253,6 +436,8 @@ int GuiManager::guiMainLoop()
     //--------------------------------------------
 
     ClassicChess game;
+
+
 
     auto vertices = getChessGameBoardVertices(game);
     auto indices = getChessGameBoardIndices();
@@ -286,10 +471,10 @@ int GuiManager::guiMainLoop()
     boardVAO.LinkAttrib(
         boardVBO,
         1,
-        3,
+        2,
         GL_FLOAT,
         sizeof(RenderVertex),
-        reinterpret_cast<void*>(offsetof(RenderVertex, r))
+        reinterpret_cast<void*>(offsetof(RenderVertex, u))
     );
 
     
@@ -309,10 +494,22 @@ int GuiManager::guiMainLoop()
 
             
             shaderProgram.Activate();
+            glUniform1i(
+                glGetUniformLocation(
+                    shaderProgram.ID,
+                    "chessAtlas"
+                ),
+                0
+            );
+
             glClearColor(0.82f, 0.76f, 0.71f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
 
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, atlasTexture);
+
             boardVAO.Bind();
+
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
 
 
@@ -329,16 +526,9 @@ int GuiManager::guiMainLoop()
 
             glfwPollEvents();
 
-
-
         }
 
         shaderProgram.Delete();
-
-
-
-
-
 
     }
 

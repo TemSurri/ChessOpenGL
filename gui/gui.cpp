@@ -1,12 +1,342 @@
 #include "gui.h"
-#include <iostream>
-#include "shader.h"
-#include "vao.h"
-#include "vbo.h"
-#include "ebo.h"
+
 #include "../external/stb/stb_image.h"
 
-// init board VBO, EBO, VAO with deafult 8x8
+#include <algorithm>
+#include <cstddef>
+#include <iostream>
+#include <stdexcept>
+#include <utility>
+
+namespace
+{
+    constexpr float BOARD_START = -0.8f;
+    constexpr float SQUARE_SIZE = 0.2f;
+
+    GLuint loadTexture(const char* path)
+    {
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+
+        stbi_set_flip_vertically_on_load(true);
+
+        unsigned char* data = stbi_load(
+            path,
+            &width,
+            &height,
+            &channels,
+            STBI_rgb_alpha
+        );
+
+        if (data == nullptr)
+        {
+            std::cerr
+                << "Failed to load texture: "
+                << path << '\n'
+                << stbi_failure_reason() << '\n';
+
+            return 0;
+        }
+
+        GLuint textureID = 0;
+
+        glGenTextures(1, &textureID);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+
+        glTexParameteri(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_WRAP_S,
+            GL_CLAMP_TO_EDGE
+        );
+
+        glTexParameteri(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_WRAP_T,
+            GL_CLAMP_TO_EDGE
+        );
+
+        glTexParameteri(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_MIN_FILTER,
+            GL_LINEAR
+        );
+
+        glTexParameteri(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_MAG_FILTER,
+            GL_LINEAR
+        );
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA8,
+            width,
+            height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            data
+        );
+
+        stbi_image_free(data);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        return textureID;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Game interaction
+// -----------------------------------------------------------------------------
+
+bool GuiManager::isAITurn(
+    const ClassicChess& game) const
+{
+    if (gameMode != GameMode::PLAYER_VS_AI)
+    {
+        return false;
+    }
+
+    return game.isWhiteTurn() == aiPlaysWhite;
+}
+
+bool GuiManager::selectedPieceBelongsToCurrentPlayer(
+    const ClassicChess& game,
+    int square) const
+{
+    const ClassicChess::PieceTypeBit piece =
+        game.piece_on_square(square);
+
+    if (piece == ClassicChess::NO_PIECE)
+    {
+        return false;
+    }
+
+    const bool pieceIsWhite =
+        piece >= ClassicChess::W_PAWN &&
+        piece <= ClassicChess::W_KING;
+
+    return pieceIsWhite == game.isWhiteTurn();
+}
+
+bool GuiManager::checkAndLogGameOver(
+    ClassicChess& game)
+{
+    if (gameFinished)
+    {
+        return true;
+    }
+
+    const ClassicChess::OutCome outcome =
+        game.getGameState();
+
+    if (outcome == ClassicChess::Normal)
+    {
+        return false;
+    }
+
+    gameFinished = true;
+    aiMovePending = false;
+    selectedSquare = -1;
+
+    std::cout << "\n========================================\n";
+
+    switch (outcome)
+    {
+    case ClassicChess::WhiteWin:
+        std::cout << "GAME OVER: White wins by checkmate.\n";
+        break;
+
+    case ClassicChess::BlackWin:
+        std::cout << "GAME OVER: Black wins by checkmate.\n";
+        break;
+
+    case ClassicChess::Draw:
+        std::cout << "GAME OVER: Draw by stalemate.\n";
+        break;
+
+    case ClassicChess::Normal:
+        break;
+    }
+
+    std::cout << "Close the window to exit.\n";
+    std::cout << "========================================\n\n";
+
+    return true;
+}
+
+void GuiManager::rebuildPieces(
+    ClassicChess& game)
+{
+    PieceVAO.Delete();
+    PieceVBO.Delete();
+    PieceEBO.Delete();
+
+    initializePieces(game);
+}
+
+void GuiManager::processMouseInput(
+    GLFWwindow* window,
+    ClassicChess& game)
+{
+    if (gameFinished)
+    {
+        return;
+    }
+
+    if (isAITurn(game))
+    {
+        selectedSquare = -1;
+        return;
+    }
+
+    const bool leftMousePressed =
+        glfwGetMouseButton(
+            window,
+            GLFW_MOUSE_BUTTON_LEFT
+        ) == GLFW_PRESS;
+
+    const bool newClick =
+        leftMousePressed && !leftMouseWasPressed;
+
+    leftMouseWasPressed = leftMousePressed;
+
+    if (!newClick)
+    {
+        return;
+    }
+
+    const int clickedSquare =
+        mouseToSquare(window);
+
+    if (clickedSquare == -1)
+    {
+        selectedSquare = -1;
+        return;
+    }
+
+    if (selectedSquare == -1)
+    {
+        if (selectedPieceBelongsToCurrentPlayer(
+            game,
+            clickedSquare
+        ))
+        {
+            selectedSquare = clickedSquare;
+
+            std::cout
+                << "Selected square "
+                << selectedSquare
+                << ".\n";
+        }
+
+        return;
+    }
+
+    if (clickedSquare == selectedSquare)
+    {
+        selectedSquare = -1;
+        return;
+    }
+
+    if (selectedPieceBelongsToCurrentPlayer(
+        game,
+        clickedSquare
+    ))
+    {
+        selectedSquare = clickedSquare;
+        return;
+    }
+
+    const int from = selectedSquare;
+    const int to = clickedSquare;
+
+    if (!game.tryMove(from, to))
+    {
+        std::cout << "Illegal move.\n";
+        selectedSquare = -1;
+        return;
+    }
+
+    rebuildPieces(game);
+
+    std::cout
+        << "Human move: "
+        << from
+        << " -> "
+        << to
+        << '\n';
+
+    selectedSquare = -1;
+
+    if (checkAndLogGameOver(game))
+    {
+        return;
+    }
+
+    // The human position must be presented before the AI changes the board.
+    waitOneFrameBeforeAI = true;
+    aiMovePending = true;
+}
+
+void GuiManager::processAITurn(
+    ClassicChess& game)
+{
+    if (gameFinished)
+    {
+        return;
+    }
+
+    if (!isAITurn(game))
+    {
+        aiMovePending = true;
+        return;
+    }
+
+    if (waitOneFrameBeforeAI)
+    {
+        waitOneFrameBeforeAI = false;
+        return;
+    }
+
+    if (!aiMovePending)
+    {
+        return;
+    }
+
+    if (checkAndLogGameOver(game))
+    {
+        return;
+    }
+
+    aiMovePending = false;
+
+    std::cout
+        << "AI searching at depth "
+        << aiDepth
+        << "...\n";
+
+    if (!game.makeAIMove(aiDepth))
+    {
+        checkAndLogGameOver(game);
+        return;
+    }
+
+    rebuildPieces(game);
+
+    std::cout << "AI move completed.\n";
+
+    checkAndLogGameOver(game);
+}
+
+// -----------------------------------------------------------------------------
+// OpenGL initialization
+// -----------------------------------------------------------------------------
+
 void GuiManager::initializeBoard()
 {
     auto vertices = getVerticesForBoard();
@@ -14,7 +344,6 @@ void GuiManager::initializeBoard()
 
     boardIndexCount =
         static_cast<GLsizei>(indices.size());
-
 
     VAO vao;
     vao.Create();
@@ -64,10 +393,11 @@ void GuiManager::initializeBoard()
     BoardEBO = std::move(ebo);
 }
 
-// this function inits the VBO, EBO, VAO for the pieces using a board state
-void GuiManager::initializePieces(ClassicChess& game) {
-    // pieces
-    auto pieceVertices = getVerticesForPieces(game);
+void GuiManager::initializePieces(
+    ClassicChess& game)
+{
+    auto pieceVertices =
+        getVerticesForPieces(game);
 
     auto pieceIndices =
         getPieceIndices(pieceVertices.size() / 4);
@@ -82,16 +412,14 @@ void GuiManager::initializePieces(ClassicChess& game) {
     VBO pieceVBO(
         pieceVertices.data(),
         static_cast<GLsizeiptr>(
-            pieceVertices.size() *
-            sizeof(textured_vertex)
+            pieceVertices.size() * sizeof(textured_vertex)
             )
     );
 
     EBO pieceEBO(
         pieceIndices.data(),
         static_cast<GLsizeiptr>(
-            pieceIndices.size() *
-            sizeof(GLuint)
+            pieceIndices.size() * sizeof(GLuint)
             )
     );
 
@@ -124,107 +452,32 @@ void GuiManager::initializePieces(ClassicChess& game) {
     PieceVAO = std::move(pieceVAO);
     PieceVBO = std::move(pieceVBO);
     PieceEBO = std::move(pieceEBO);
+}
 
-};
-
-void GuiManager::initializeShaders() {
-    Shader shaderProgram(
+void GuiManager::initializeShaders()
+{
+    Shader boardProgram(
         "resources/shaders/default.vert",
         "resources/shaders/default.frag"
     );
 
-    Shader piecesShader(
+    Shader pieceProgram(
         "resources/shaders/piece.vert",
         "resources/shaders/piece.frag"
     );
 
-    boardShader = std::move(shaderProgram);
-    pieceShader = std::move(piecesShader);
+    boardShader = std::move(boardProgram);
+    pieceShader = std::move(pieceProgram);
 
     pieceShader.Activate();
 
     glUniform1i(
-        glGetUniformLocation(pieceShader.ID, "chessAtlas"),
+        glGetUniformLocation(
+            pieceShader.ID,
+            "chessAtlas"
+        ),
         0
     );
-
-};
-
-//chess atlas texture set up
-GLuint loadTexture(const char* path)
-{
-    int width = 0;
-    int height = 0;
-    int channels = 0;
-
-    stbi_set_flip_vertically_on_load(true);
-
-    unsigned char* data = stbi_load(
-        path,
-        &width,
-        &height,
-        &channels,
-        STBI_rgb_alpha
-    );
-
-    if (!data)
-    {
-        std::cerr
-            << "Failed to load texture: "
-            << path << '\n'
-            << stbi_failure_reason() << '\n';
-
-        return 0;
-    }
-
-    GLuint textureID = 0;
-
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_WRAP_S,
-        GL_CLAMP_TO_EDGE
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_WRAP_T,
-        GL_CLAMP_TO_EDGE
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_MIN_FILTER,
-        GL_LINEAR
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_MAG_FILTER,
-        GL_LINEAR
-    );
-
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_RGBA8,
-        width,
-        height,
-        0,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        data
-    );
-
-    stbi_image_free(data);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    return textureID;
 }
 
 void GuiManager::initializeTexture()
@@ -235,58 +488,105 @@ void GuiManager::initializeTexture()
 
     if (atlasTexture == 0)
     {
-        throw std::runtime_error("Failed to load chess atlas");
+        throw std::runtime_error(
+            "Failed to load chess atlas"
+        );
     }
 
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendFunc(
+        GL_SRC_ALPHA,
+        GL_ONE_MINUS_SRC_ALPHA
+    );
 }
 
-//getting vertices
+// -----------------------------------------------------------------------------
+// CPU-side mesh generation
+// -----------------------------------------------------------------------------
+
 std::vector<GuiManager::colored_vertex>
 GuiManager::getVerticesForBoard()
 {
     std::vector<colored_vertex> vertices;
     vertices.reserve(64 * 4);
 
-    constexpr float boardStart = -0.8f;
-    constexpr float squareSize = 0.2f;
+    const Color light{
+        0.85f,
+        0.78f,
+        0.65f
+    };
 
-    const Color light{ 0.85f, 0.78f, 0.65f };
-    const Color dark{ 0.35f, 0.18f, 0.10f };
+    const Color dark{
+        0.35f,
+        0.18f,
+        0.10f
+    };
 
     for (int row = 0; row < 8; row++)
     {
-        for (int col = 0; col < 8; col++)
+        for (int column = 0; column < 8; column++)
         {
-            float x = boardStart + col * squareSize;
-            float y = boardStart + row * squareSize;
+            const float x =
+                BOARD_START + column * SQUARE_SIZE;
 
-            Color color =
-                ((row + col) % 2 == 0)
+            const float y =
+                BOARD_START + row * SQUARE_SIZE;
+
+            const Color color =
+                ((row + column) % 2 == 0)
                 ? light
                 : dark;
 
-            vertices.insert(vertices.end(), {
-                {x,              y,              0.0f, color.r, color.g, color.b},
-                {x + squareSize, y,              0.0f, color.r, color.g, color.b},
-                {x + squareSize, y + squareSize, 0.0f, color.r, color.g, color.b},
-                {x,              y + squareSize, 0.0f, color.r, color.g, color.b}
-                });
+            vertices.insert(
+                vertices.end(),
+                {
+                    {x, y, 0.0f, color.r, color.g, color.b},
+                    {x + SQUARE_SIZE, y, 0.0f, color.r, color.g, color.b},
+                    {x + SQUARE_SIZE, y + SQUARE_SIZE, 0.0f, color.r, color.g, color.b},
+                    {x, y + SQUARE_SIZE, 0.0f, color.r, color.g, color.b}
+                }
+            );
         }
     }
 
     return vertices;
 }
 
+std::vector<GLuint>
+GuiManager::getBoardIndices()
+{
+    std::vector<GLuint> indices;
+    indices.reserve(64 * 6);
+
+    for (GLuint square = 0; square < 64; square++)
+    {
+        const GLuint base = square * 4;
+
+        indices.insert(
+            indices.end(),
+            {
+                base,
+                base + 1,
+                base + 2,
+
+                base,
+                base + 2,
+                base + 3
+            }
+        );
+    }
+
+    return indices;
+}
+
 GuiManager::AtlasCell GuiManager::getAtlasCell(
     ClassicChess::PieceTypeBit piece)
 {
-    bool isWhite =
+    const bool isWhite =
         piece >= ClassicChess::W_PAWN &&
         piece <= ClassicChess::W_KING;
 
-    int row = isWhite ? 0 : 1;
+    const int row = isWhite ? 0 : 1;
     int column = -1;
 
     switch (piece)
@@ -332,15 +632,17 @@ GuiManager::UVRegion GuiManager::getUVRegion(
     int column,
     int row)
 {
-    constexpr float cellWidth = 1.0f / 6.0f;
-    constexpr float cellHeight = 1.0f / 2.0f;
+    const float uMin =
+        column * CELL_WIDTH;
 
-    float uMin = column * cellWidth;
-    float uMax = (column + 1) * cellWidth;
+    const float uMax =
+        (column + 1) * CELL_WIDTH;
 
-    // Atlas rows begin at the top, but OpenGL UV Y begins at the bottom.
-    float vMax = 1.0f - row * cellHeight;
-    float vMin = 1.0f - (row + 1) * cellHeight;
+    const float vMax =
+        1.0f - row * CELL_HEIGHT;
+
+    const float vMin =
+        1.0f - (row + 1) * CELL_HEIGHT;
 
     return {
         uMin,
@@ -351,136 +653,179 @@ GuiManager::UVRegion GuiManager::getUVRegion(
 }
 
 std::vector<GuiManager::textured_vertex>
-GuiManager::getVerticesForPieces(ClassicChess& game)
+GuiManager::getVerticesForPieces(
+    ClassicChess& game)
 {
     std::vector<textured_vertex> vertices;
     vertices.reserve(32 * 4);
 
-    constexpr float boardStart = -0.8f;
-    constexpr float squareSize = 0.2f;
-
     for (int square = 0; square < 64; square++)
     {
-        ClassicChess::PieceTypeBit piece =
+        const ClassicChess::PieceTypeBit piece =
             game.piece_on_square(square);
 
         if (piece == ClassicChess::NO_PIECE)
+        {
             continue;
+        }
 
-        int row = square / 8;
-        int col = square % 8;
+        const int row = square / 8;
+        const int column = square % 8;
 
-        float x = boardStart + col * squareSize;
-        float y = boardStart + row * squareSize;
+        const float x =
+            BOARD_START + column * SQUARE_SIZE;
 
-        AtlasCell cell = getAtlasCell(piece);
-        UVRegion uv = getUVRegion(cell.column, cell.row);
+        const float y =
+            BOARD_START + row * SQUARE_SIZE;
 
-        vertices.insert(vertices.end(), {
-            // Bottom-left
-            {x,              y,              0.0f, uv.uMin, uv.vMin},
+        const AtlasCell cell =
+            getAtlasCell(piece);
 
-            // Bottom-right
-            {x + squareSize, y,              0.0f, uv.uMax, uv.vMin},
+        const UVRegion uv =
+            getUVRegion(cell.column, cell.row);
 
-            // Top-right
-            {x + squareSize, y + squareSize, 0.0f, uv.uMax, uv.vMax},
-
-            // Top-left
-            {x,              y + squareSize, 0.0f, uv.uMin, uv.vMax}
-            });
+        vertices.insert(
+            vertices.end(),
+            {
+                {x, y, 0.0f, uv.uMin, uv.vMin},
+                {x + SQUARE_SIZE, y, 0.0f, uv.uMax, uv.vMin},
+                {x + SQUARE_SIZE, y + SQUARE_SIZE, 0.0f, uv.uMax, uv.vMax},
+                {x, y + SQUARE_SIZE, 0.0f, uv.uMin, uv.vMax}
+            }
+        );
     }
 
     return vertices;
 }
 
 std::vector<GLuint>
-GuiManager::getPieceIndices(std::size_t pieceCount)
+GuiManager::getPieceIndices(
+    std::size_t pieceCount)
 {
     std::vector<GLuint> indices;
     indices.reserve(pieceCount * 6);
 
-    for (GLuint piece = 0;
+    for (
+        GLuint piece = 0;
         piece < static_cast<GLuint>(pieceCount);
-        piece++)
+        piece++
+        )
     {
-        GLuint base = piece * 4;
+        const GLuint base = piece * 4;
 
-        indices.insert(indices.end(), {
-            base, base + 1, base + 2,
-            base, base + 2, base + 3
-            });
+        indices.insert(
+            indices.end(),
+            {
+                base,
+                base + 1,
+                base + 2,
+
+                base,
+                base + 2,
+                base + 3
+            }
+        );
     }
 
     return indices;
 }
 
-std::vector<GLuint> GuiManager::getBoardIndices()
+// -----------------------------------------------------------------------------
+// Window and mouse handling
+// -----------------------------------------------------------------------------
+
+GLFWwindow* GuiManager::guiWindowSetUp()
 {
-    std::vector<GLuint> indices;
-    indices.reserve(64 * 6);
-
-    for (GLuint square = 0; square < 64; square++)
+    if (!glfwInit())
     {
-        GLuint base = square * 4;
-
-        indices.insert(indices.end(), {
-            base, base + 1, base + 2,
-            base, base + 2, base + 3
-            });
+        throw ErrorObj{
+            GLFW_FAILED_INIT,
+            "GLFW failed to initialize"
+        };
     }
 
-    return indices;
-}
+    glfwWindowHint(
+        GLFW_CONTEXT_VERSION_MAJOR,
+        3
+    );
 
-// little set up
-GLFWwindow* GuiManager::guiWindowSetUp() {
+    glfwWindowHint(
+        GLFW_CONTEXT_VERSION_MINOR,
+        3
+    );
 
-    // init glfw
-    if (!glfwInit()) {
-        throw ErrorObj{ GLFW_FAILED_INIT , "glfw failed init"};
+    glfwWindowHint(
+        GLFW_OPENGL_PROFILE,
+        GLFW_OPENGL_CORE_PROFILE
+    );
+
+    GLFWwindow* window = glfwCreateWindow(
+        VIEWPORT_W,
+        VIEWPORT_H,
+        "Tem's Chess",
+        nullptr,
+        nullptr
+    );
+    GLFWimage icon{};
+
+    int channels;
+
+    icon.pixels = stbi_load(
+        "resources/icons/chess_icon.png",
+        &icon.width,
+        &icon.height,
+        &channels,
+        4
+    );
+
+    if (icon.pixels)
+    {
+        glfwSetWindowIcon(
+            window,
+            1,
+            &icon
+        );
+
+        stbi_image_free(icon.pixels);
     }
 
-    // give info to window creations
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    //create window
-    GLFWwindow* window = glfwCreateWindow(800, 800, "Tem's Chess", NULL, NULL);
-    if (window == NULL) {
-        
-        ErrorObj error{ WINDOW_FAILED_INIT, "glfw window failed to create" };
-        throw error;
-
+    if (window == nullptr)
+    {
+        throw ErrorObj{
+            WINDOW_FAILED_INIT,
+            "GLFW failed to create the window"
+        };
     }
 
     return window;
-
 }
 
-//window clean up
-void GuiManager::guiWindowCleanUp(GLFWwindow* window){
-
-    if (window != nullptr) {
+void GuiManager::guiWindowCleanUp(
+    GLFWwindow* window)
+{
+    if (window != nullptr)
+    {
         glfwDestroyWindow(window);
     }
-    glfwTerminate();
 
+    glfwTerminate();
 }
 
-//change the size of the viewport window automatically
 void GuiManager::framebufferSizeCallback(
     GLFWwindow* window,
     int width,
     int height)
 {
-    // Choose the smaller dimension so the viewport remains square.
-    int viewportSize = std::min(width, height);
+    (void)window;
 
-    // Center the square viewport.
-    int viewportX = (width - viewportSize) / 2;
-    int viewportY = (height - viewportSize) / 2;
+    const int viewportSize =
+        std::min(width, height);
+
+    const int viewportX =
+        (width - viewportSize) / 2;
+
+    const int viewportY =
+        (height - viewportSize) / 2;
 
     glViewport(
         viewportX,
@@ -490,112 +835,198 @@ void GuiManager::framebufferSizeCallback(
     );
 }
 
-// used to convert mouse hit coord to sqaure
-int GuiManager::mouseToSquare(GLFWwindow* window)
+int GuiManager::mouseToSquare(
+    GLFWwindow* window)
 {
-    double mouseX;
-    double mouseY;
-    glfwGetCursorPos(window, &mouseX, &mouseY);
+    double cursorX = 0.0;
+    double cursorY = 0.0;
 
-    int width;
-    int height;
-    glfwGetWindowSize(window, &width, &height);
+    glfwGetCursorPos(
+        window,
+        &cursorX,
+        &cursorY
+    );
 
-    // Same calculation used by the responsive viewport.
-    float viewportSize =
-        static_cast<float>(std::min(width, height));
+    int windowWidth = 0;
+    int windowHeight = 0;
 
-    float viewportX = (width - viewportSize) / 2.0f;
-    float viewportY = (height - viewportSize) / 2.0f;
+    glfwGetWindowSize(
+        window,
+        &windowWidth,
+        &windowHeight
+    );
 
-    // Board occupies -0.8 to 0.8, or 80% of viewport.
-    float boardSize = viewportSize * 0.8f;
+    int framebufferWidth = 0;
+    int framebufferHeight = 0;
 
-    // Remaining 20% gives a 10% margin on each side.
-    float boardLeft = viewportX + viewportSize * 0.1f;
-    float boardTop = viewportY + viewportSize * 0.1f;
+    glfwGetFramebufferSize(
+        window,
+        &framebufferWidth,
+        &framebufferHeight
+    );
 
-    float squareSize = boardSize / 8.0f;
-
-    // Check whether click is inside the board.
-    if (mouseX < boardLeft ||
-        mouseX >= boardLeft + boardSize ||
-        mouseY < boardTop ||
-        mouseY >= boardTop + boardSize)
+    if (
+        windowWidth <= 0 ||
+        windowHeight <= 0 ||
+        framebufferWidth <= 0 ||
+        framebufferHeight <= 0
+        )
     {
         return -1;
     }
 
-    int column = static_cast<int>(
-        (mouseX - boardLeft) / squareSize
+    const double framebufferCursorX =
+        cursorX *
+        static_cast<double>(framebufferWidth) /
+        static_cast<double>(windowWidth);
+
+    const double framebufferCursorY =
+        cursorY *
+        static_cast<double>(framebufferHeight) /
+        static_cast<double>(windowHeight);
+
+    const float viewportSize =
+        static_cast<float>(
+            std::min(
+                framebufferWidth,
+                framebufferHeight
+            )
+            );
+
+    const float viewportX =
+        (framebufferWidth - viewportSize) / 2.0f;
+
+    const float viewportY =
+        (framebufferHeight - viewportSize) / 2.0f;
+
+    const float boardSize =
+        viewportSize * 0.8f;
+
+    const float boardLeft =
+        viewportX + viewportSize * 0.1f;
+
+    const float boardTop =
+        viewportY + viewportSize * 0.1f;
+
+    const float squarePixelSize =
+        boardSize / 8.0f;
+
+    if (
+        framebufferCursorX < boardLeft ||
+        framebufferCursorX >= boardLeft + boardSize ||
+        framebufferCursorY < boardTop ||
+        framebufferCursorY >= boardTop + boardSize
+        )
+    {
+        return -1;
+    }
+
+    const int column = static_cast<int>(
+        (framebufferCursorX - boardLeft) /
+        squarePixelSize
         );
 
-    // GLFW mouse Y begins at the top.
-    int rowFromTop = static_cast<int>(
-        (mouseY - boardTop) / squareSize
+    const int rowFromTop = static_cast<int>(
+        (framebufferCursorY - boardTop) /
+        squarePixelSize
         );
 
-    // Bitboard row 0 is usually at the bottom.
-    int row = 7 - rowFromTop;
+    const int row = 7 - rowFromTop;
 
     return row * 8 + column;
 }
 
-void GuiManager::drawBoard() {
+// -----------------------------------------------------------------------------
+// Drawing
+// -----------------------------------------------------------------------------
 
+void GuiManager::drawBoard()
+{
     boardShader.Activate();
     BoardVAO.Bind();
 
     glDrawElements(
         GL_TRIANGLES,
-        static_cast<GLsizei>(boardIndexCount),
+        boardIndexCount,
         GL_UNSIGNED_INT,
         nullptr
     );
-
 }
 
-void GuiManager::drawPieces() {
+void GuiManager::drawPieces()
+{
     pieceShader.Activate();
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, atlasTexture);
+    glBindTexture(
+        GL_TEXTURE_2D,
+        atlasTexture
+    );
 
     PieceVAO.Bind();
 
     glDrawElements(
         GL_TRIANGLES,
-        static_cast<GLsizei>(pieceIndexCount),
+        pieceIndexCount,
         GL_UNSIGNED_INT,
         nullptr
     );
-
-
 }
 
+// -----------------------------------------------------------------------------
+// Resource cleanup
+// -----------------------------------------------------------------------------
 
+void GuiManager::cleanUpOpenGLResources()
+{
+    if (atlasTexture != 0)
+    {
+        glDeleteTextures(
+            1,
+            &atlasTexture
+        );
+
+        atlasTexture = 0;
+    }
+
+    BoardVAO.Delete();
+    BoardVBO.Delete();
+    BoardEBO.Delete();
+    boardShader.Delete();
+
+    PieceVAO.Delete();
+    PieceVBO.Delete();
+    PieceEBO.Delete();
+    pieceShader.Delete();
+
+    boardIndexCount = 0;
+    pieceIndexCount = 0;
+}
+
+// -----------------------------------------------------------------------------
+// Main loop
+// -----------------------------------------------------------------------------
 
 int GuiManager::guiMainLoop()
 {
     GLFWwindow* window = nullptr;
 
-    // window pbject should be successfuly pointed to by window 
-    try {
+    try
+    {
         window = guiWindowSetUp();
     }
-    catch (const ErrorObj& error) {
-
+    catch (const ErrorObj& error)
+    {
         guiWindowCleanUp(window);
-        std::cout << error.error_msg << std::endl;
+        std::cerr << error.error_msg << '\n';
         return -1;
     }
 
-    // make openGl context connected to our window
     glfwMakeContextCurrent(window);
 
     if (!gladLoadGL())
     {
-        std::cerr << "Failed to initialize GLAD\n";
+        std::cerr << "Failed to initialize GLAD.\n";
         guiWindowCleanUp(window);
         return -1;
     }
@@ -605,7 +1036,6 @@ int GuiManager::guiMainLoop()
         &GuiManager::framebufferSizeCallback
     );
 
-    // Set the viewport once for the initial window size.
     int framebufferWidth = 0;
     int framebufferHeight = 0;
 
@@ -620,59 +1050,65 @@ int GuiManager::guiMainLoop()
         framebufferWidth,
         framebufferHeight
     );
-    //--------------------------------------------
 
-    ClassicChess game;  
+    ClassicChess game;
 
-    initializeShaders();
-    initializeTexture();
-    initializeBoard();
-    initializePieces(game);
+    try
+    {
+        initializeShaders();
+        initializeTexture();
+        initializeBoard();
+        initializePieces(game);
+    }
+    catch (const std::exception& error)
+    {
+        std::cerr
+            << "GUI initialization failed: "
+            << error.what()
+            << '\n';
+
+        cleanUpOpenGLResources();
+        guiWindowCleanUp(window);
+
+        return -1;
+    }
+
     std::cout
-        << "Board VAO: " << BoardVAO.ID << '\n'
-        << "Board VBO: " << BoardVBO.ID << '\n'
-        << "Board EBO: " << BoardEBO.ID << '\n'
-        << "Board shader: " << boardShader.ID << '\n'
-        << "Board indices: " << boardIndexCount << '\n'
-        << "Piece VAO: " << PieceVAO.ID << '\n'
-        << "Piece shader: " << pieceShader.ID << '\n'
-        << "Piece indices: " << pieceIndexCount << '\n'
-        << "Texture: " << atlasTexture << '\n';
-
-    std::cout
-        << "VAO valid: "
-        << static_cast<int>(glIsVertexArray(BoardVAO.ID)) << '\n'
-
-        << "VBO valid: "
-        << static_cast<int>(glIsBuffer(BoardVBO.ID)) << '\n'
-
-        << "EBO valid: "
-        << static_cast<int>(glIsBuffer(BoardEBO.ID)) << '\n'
-
-        << "Shader valid: "
-        << static_cast<int>(glIsProgram(boardShader.ID)) << '\n';
-
+        << "Tem's Chess started.\n"
+        << "Human: White\n"
+        << "AI: Black\n"
+        << "AI depth: "
+        << aiDepth
+        << "\n\n";
 
     while (!glfwWindowShouldClose(window))
     {
-        glClearColor(0.82f, 0.76f, 0.71f, 1.0f);
+        glfwPollEvents();
+
+        processMouseInput(
+            window,
+            game
+        );
+
+        processAITurn(game);
+
+        glClearColor(
+            0.82f,
+            0.76f,
+            0.71f,
+            1.0f
+        );
+
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // 1. Draw the colored board first.
         drawBoard();
-
-        // 2. Draw transparent pieces over the board.
         drawPieces();
 
-        
-
         glfwSwapBuffers(window);
-        glfwPollEvents();
     }
 
-    glDeleteTextures(1, &atlasTexture);
-   
-    //clean up window
+    cleanUpOpenGLResources();
     guiWindowCleanUp(window);
+
     return 0;
 }

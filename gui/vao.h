@@ -84,4 +84,13 @@ public:
     {
         glBindVertexArray(0);
     }
+
+    void Delete()
+    {
+        if (ID != 0)
+        {
+            glDeleteVertexArrays(1, &ID);
+            ID = 0;
+        }
+    }
 };

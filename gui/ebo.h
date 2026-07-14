@@ -58,6 +58,15 @@ public:
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ID);
     }
 
+    void Delete()
+    {
+        if (ID != 0)
+        {
+            glDeleteBuffers(1, &ID);
+            ID = 0;
+        }
+    }
+
     void Unbind() const
     {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);

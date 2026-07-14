@@ -4,156 +4,209 @@
 #include <GLFW/glfw3.h>
 
 #include "../game.h"
-#include "vao.h"
-#include "vbo.h"
 #include "ebo.h"
 #include "shader.h"
+#include "vao.h"
+#include "vbo.h"
 
-#include <algorithm>
-#include <array>
+#include <cstddef>
 #include <vector>
-#include <utility>
 
+// The current chess atlas contains six piece columns and two color rows.
 constexpr int ATLAS_COLUMNS = 6;
-constexpr int ATLAS_ROWS = 5;
+constexpr int ATLAS_ROWS = 2;
 
 constexpr float CELL_WIDTH = 1.0f / ATLAS_COLUMNS;
 constexpr float CELL_HEIGHT = 1.0f / ATLAS_ROWS;
 
+class GuiManager
+{
+public:
+    GuiManager() = default;
 
+    int guiMainLoop();
 
-class GuiManager {
-	
+private:
+    // -------------------------------------------------------------------------
+    // Window setup
+    // -------------------------------------------------------------------------
 
+    static void framebufferSizeCallback(
+        GLFWwindow* window,
+        int width,
+        int height
+    );
 
-	public:
-		// function to make widnow responsive
-		static void framebufferSizeCallback(GLFWwindow* window,
-			int width,
-			int height);
+    GLFWwindow* guiWindowSetUp();
+    void guiWindowCleanUp(GLFWwindow* window);
 
-		//window set up 
-		GLFWwindow* guiWindowSetUp();
-		void guiWindowCleanUp(GLFWwindow* window);
+    int VIEWPORT_W = 800;
+    int VIEWPORT_H = 800;
 
-		int VIEWPORT_W = 800;
-		int VIEWPORT_H = 800;
+    enum ERROR
+    {
+        UNKNOWN,
+        WINDOW_FAILED_INIT,
+        GLFW_FAILED_INIT
+    };
 
-		//error logs
-		enum ERROR {
-			UNKNOWN,
-			WINDOW_FAILED_INIT,
-			GLFW_FAILED_INIT
-		};
+    struct ErrorObj
+    {
+        ERROR error = UNKNOWN;
+        const char* error_msg = "";
+    };
 
-		struct ErrorObj {
-			ERROR error = UNKNOWN;
-			const char* error_msg;
-		};
+    // -------------------------------------------------------------------------
+    // Vertex data
+    // -------------------------------------------------------------------------
 
-		
-		// vertex pipeline
+    struct AtlasCell
+    {
+        int column;
+        int row;
+    };
 
-		struct AtlasCell
-		{
-			int column;
-			int row;
-		};
+    struct UVRegion
+    {
+        float uMin;
+        float vMin;
+        float uMax;
+        float vMax;
+    };
 
-		struct UVRegion
-		{
-			float uMin, vMin;
-			float uMax, vMax;
-		};
+    struct textured_vertex
+    {
+        GLfloat x;
+        GLfloat y;
+        GLfloat z = 0.0f;
 
-		struct textured_vertex {
+        GLfloat u;
+        GLfloat v;
+    };
 
-			GLfloat x;
-			GLfloat y;
-			GLfloat z = 0.0f;
+    struct colored_vertex
+    {
+        GLfloat x;
+        GLfloat y;
+        GLfloat z = 0.0f;
 
-			GLfloat u;
-			GLfloat v;
-		};
+        GLfloat r;
+        GLfloat g;
+        GLfloat b;
+    };
 
-		struct colored_vertex {
+    struct Color
+    {
+        GLfloat r;
+        GLfloat g;
+        GLfloat b;
+    };
 
-			GLfloat x;
-			GLfloat y;
-			GLfloat z = 0.0f;
+    // -------------------------------------------------------------------------
+    // CPU-side mesh generation
+    // -------------------------------------------------------------------------
 
-			GLfloat r;
-			GLfloat g;
-			GLfloat b;
-		};
+    std::vector<colored_vertex> getVerticesForBoard();
+    std::vector<GLuint> getBoardIndices();
 
-		struct Color {
-			GLfloat r;
-			GLfloat g;
-			GLfloat b;
-		};
+    std::vector<textured_vertex> getVerticesForPieces(
+        ClassicChess& game
+    );
 
-		struct pieceText {
+    std::vector<GLuint> getPieceIndices(
+        std::size_t pieceCount
+    );
 
-			std::array<textured_vertex, 4> vertices;
+    AtlasCell getAtlasCell(
+        ClassicChess::PieceTypeBit piece
+    );
 
-		};
+    UVRegion getUVRegion(
+        int column,
+        int row
+    );
 
-		struct squareText {
+    // -------------------------------------------------------------------------
+    // OpenGL initialization and drawing
+    // -------------------------------------------------------------------------
 
-			std::array<colored_vertex, 4> vertices;
+    void initializeBoard();
+    void initializePieces(ClassicChess& game);
+    void initializeShaders();
+    void initializeTexture();
 
-		};
+    void drawBoard();
+    void drawPieces();
 
-		std::vector<colored_vertex> getVerticesForBoard();
+    void cleanUpOpenGLResources();
 
-		std::vector<GLuint> getBoardIndices();
-		
-		std::vector<textured_vertex>getVerticesForPieces(ClassicChess& game);
+    // -------------------------------------------------------------------------
+    // Game interaction
+    // -------------------------------------------------------------------------
 
-		std::vector<GLuint>getPieceIndices(std::size_t pieceCount);
+    enum class GameMode
+    {
+        PLAYER_VS_PLAYER,
+        PLAYER_VS_AI
+    };
 
-		AtlasCell getAtlasCell(ClassicChess::PieceTypeBit piece);
+    GameMode gameMode = GameMode::PLAYER_VS_AI;
 
-		UVRegion getUVRegion(int column, int row);
+    // Human plays White by default.
+    bool aiPlaysWhite = false;
+    int aiDepth = 2;
 
-		GuiManager() {
+    int selectedSquare = -1;
+    bool leftMouseWasPressed = false;
 
-		};
+    bool aiMovePending = true;
+    bool waitOneFrameBeforeAI = false;
+    bool gameFinished = false;
 
-		int guiMainLoop();
+    int mouseToSquare(GLFWwindow* window);
 
-		//game logic
-		int mouseToSquare(GLFWwindow* window);
+    void processMouseInput(
+        GLFWwindow* window,
+        ClassicChess& game
+    );
 
+    void processAITurn(
+        ClassicChess& game
+    );
 
-		// actual drawing material
-		
-		private:
-			VAO BoardVAO;
-			VAO PieceVAO;
+    bool isAITurn(
+        const ClassicChess& game
+    ) const;
 
-			VBO BoardVBO;
-			EBO BoardEBO;
+    bool selectedPieceBelongsToCurrentPlayer(
+        const ClassicChess& game,
+        int square
+    ) const;
 
-			VBO PieceVBO;
-			EBO PieceEBO;
+    bool checkAndLogGameOver(
+        ClassicChess& game
+    );
 
-			Shader boardShader;
-			Shader pieceShader;
+    void rebuildPieces(
+        ClassicChess& game
+    );
 
-			GLuint atlasTexture = 0;
+    // -------------------------------------------------------------------------
+    // OpenGL resources
+    // -------------------------------------------------------------------------
 
-			GLsizei boardIndexCount = 0;
-			GLsizei pieceIndexCount = 0;
+    VAO BoardVAO;
+    VBO BoardVBO;
+    EBO BoardEBO;
+    Shader boardShader;
 
-		public:
-			void initializeBoard();
-			void initializePieces(ClassicChess& game);
-			void initializeShaders();
-			void initializeTexture();
+    VAO PieceVAO;
+    VBO PieceVBO;
+    EBO PieceEBO;
+    Shader pieceShader;
 
-			void drawBoard();
-			void drawPieces();
+    GLuint atlasTexture = 0;
 
+    GLsizei boardIndexCount = 0;
+    GLsizei pieceIndexCount = 0;
 };

@@ -67,4 +67,13 @@ public:
     {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
+
+    void Delete()
+    {
+        if (ID != 0)
+        {
+            glDeleteBuffers(1, &ID);
+            ID = 0;
+        }
+    }
 };

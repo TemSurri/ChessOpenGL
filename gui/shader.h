@@ -73,6 +73,15 @@ public:
         glUseProgram(ID);
     }
 
+    void Delete()
+    {
+        if (ID != 0)
+        {
+            glDeleteProgram(ID);
+            ID = 0;
+        }
+    }
+
 private:
     static std::string readFile(const char* filepath);
 };

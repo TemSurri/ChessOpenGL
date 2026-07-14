@@ -10,11 +10,12 @@
 
 class ClassicChess {
 
-	enum PieceTypeBit {
-		NO_PIECE,
-		W_PAWN, W_KNIGHT, W_BISHOP, W_ROOK, W_QUEEN, W_KING,
-		B_PAWN, B_KNIGHT, B_BISHOP, B_ROOK, B_QUEEN, B_KING
-	};
+	public:
+		enum PieceTypeBit {
+			NO_PIECE,
+			W_PAWN, W_KNIGHT, W_BISHOP, W_ROOK, W_QUEEN, W_KING,
+			B_PAWN, B_KNIGHT, B_BISHOP, B_ROOK, B_QUEEN, B_KING
+		};
 
 	enum MoveType {
 		NORMAL_MOVE,
@@ -166,8 +167,6 @@ class ClassicChess {
 		int inline row_col_to_square(int row, int col);
 
 		//MOVE GENERATION --------------------------------
-
-		PieceTypeBit piece_on_square(int square);
 
 		void add_move(std::vector<Move>& moves, int from, int to, PieceTypeBit moved);	
 
@@ -360,6 +359,10 @@ class ClassicChess {
 		ClassicChess::OutCome calculateState();
 
 	public:
+
+
+		//for gui
+		PieceTypeBit piece_on_square(int square) const;
 
 		ClassicChess() :transpositionalTable(TTsize) {
 			init_knight_attacks();

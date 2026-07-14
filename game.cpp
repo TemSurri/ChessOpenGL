@@ -5,7 +5,7 @@
 
 //MOVE GENERATION HELPERS -------------------------------------------
 
-ClassicChess::PieceTypeBit ClassicChess::piece_on_square(int square)
+ClassicChess::PieceTypeBit ClassicChess::piece_on_square(int square) const
 {
 	uint64_t mask = 1ULL << square;
 

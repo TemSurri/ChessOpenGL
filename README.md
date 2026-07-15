@@ -137,6 +137,43 @@ Search time varies depending on the position, move ordering, and number of legal
 
 ---
 
+
+# Building & Running
+
+Clone the repository, configure a **Release** build, compile, and run:
+
+```bash
+git clone <repository-url>
+cd Chess
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+
+### Run
+
+**macOS / Linux**
+
+```bash
+./build/Chess
+```
+
+**Windows**
+
+```bash
+.\build\Release\Chess.exe
+```
+
+> **Requirements**
+>
+> - C++20 compatible compiler
+> - CMake 3.20+
+> - OpenGL 3.3+
+> - GLFW (included)
+> - GLAD (included)
+
+---
+
 # Estimated Playing Strength
 
 **Estimated Elo:** *To be determined*
